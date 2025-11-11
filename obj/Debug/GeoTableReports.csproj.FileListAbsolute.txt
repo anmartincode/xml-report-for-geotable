@@ -37,3 +37,5 @@ c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\GeoTableRepo
 c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\refint\GeoTableReports.dll
 c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\GeoTableReports.pdb
 c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\ref\GeoTableReports.dll
+C:\Users\anmartinez\.vscode\local\xml-report-for-geotable\bin\Debug\BouncyCastle.Cryptography.dll
+C:\Users\anmartinez\.vscode\local\xml-report-for-geotable\bin\Debug\itext.bouncy-castle-adapter.dll
