@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://civil3d.autodesk.com/geotable"
+           xmlns:gt="http://civil3d.autodesk.com/geotable"
+           elementFormDefault="qualified">
+
+  <!-- Root Element -->
+  <xs:element name="GeotableReport">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="ProjectInfo" type="gt:ProjectInfoType"/>
+        <xs:element name="Alignments" type="gt:AlignmentsType"/>
+      </xs:sequence>
+      <xs:attribute name="version" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Project Info Type -->
+  <xs:complexType name="ProjectInfoType">
+    <xs:sequence>
+      <xs:element name="ProjectName" type="xs:string"/>
+      <xs:element name="GeneratedDate" type="xs:string"/>
+      <xs:element name="ReportType" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Alignments Type -->
+  <xs:complexType name="AlignmentsType">
+    <xs:sequence>
+      <xs:element name="Alignment" type="gt:AlignmentType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="count" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <!-- Alignment Type -->
+  <xs:complexType name="AlignmentType">
+    <xs:sequence>
+      <xs:element name="Properties" type="gt:AlignmentPropertiesType"/>
+      <xs:element name="Stations" type="gt:StationsType"/>
+      <xs:element name="GeometricEntities" type="gt:GeometricEntitiesType"/>
+      <xs:element name="Superelevation" type="gt:SuperelevationType" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <!-- Alignment Properties Type -->
+  <xs:complexType name="AlignmentPropertiesType">
+    <xs:sequence>
+      <xs:element name="Description" type="xs:string"/>
+      <xs:element name="Length" type="xs:decimal"/>
+      <xs:element name="StartStation" type="xs:decimal"/>
+      <xs:element name="EndStation" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Stations Type -->
+  <xs:complexType name="StationsType">
+    <xs:sequence>
+      <xs:element name="Station" type="gt:StationType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="count" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <!-- Station Type -->
+  <xs:complexType name="StationType">
+    <xs:sequence>
+      <xs:element name="Coordinates" type="gt:CoordinatesType"/>
+      <xs:element name="Direction" type="xs:decimal"/>
+      <xs:element name="Offset" type="xs:decimal"/>
+    </xs:sequence>
+    <xs:attribute name="value" type="xs:decimal" use="required"/>
+  </xs:complexType>
+
+  <!-- Coordinates Type -->
+  <xs:complexType name="CoordinatesType">
+    <xs:sequence>
+      <xs:element name="X" type="xs:decimal"/>
+      <xs:element name="Y" type="xs:decimal"/>
+      <xs:element name="Z" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Geometric Entities Type -->
+  <xs:complexType name="GeometricEntitiesType">
+    <xs:sequence>
+      <xs:element name="Entity" type="gt:EntityType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="count" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <!-- Entity Type -->
+  <xs:complexType name="EntityType">
+    <xs:sequence>
+      <xs:element name="StartStation" type="xs:decimal"/>
+      <xs:element name="EndStation" type="xs:decimal"/>
+      <xs:element name="Length" type="xs:decimal"/>
+      <xs:choice>
+        <xs:element name="LineProperties" type="gt:LinePropertiesType"/>
+        <xs:element name="ArcProperties" type="gt:ArcPropertiesType"/>
+        <xs:element name="SpiralProperties" type="gt:SpiralPropertiesType"/>
+      </xs:choice>
+    </xs:sequence>
+    <xs:attribute name="type" type="gt:EntityTypeEnum" use="required"/>
+    <xs:attribute name="index" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <!-- Entity Type Enumeration -->
+  <xs:simpleType name="EntityTypeEnum">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Line"/>
+      <xs:enumeration value="Arc"/>
+      <xs:enumeration value="Spiral"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Line Properties Type -->
+  <xs:complexType name="LinePropertiesType">
+    <xs:sequence>
+      <xs:element name="Bearing" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Arc Properties Type -->
+  <xs:complexType name="ArcPropertiesType">
+    <xs:sequence>
+      <xs:element name="Radius" type="xs:decimal"/>
+      <xs:element name="ChordLength" type="xs:decimal"/>
+      <xs:element name="Direction" type="gt:ArcDirectionEnum"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Arc Direction Enumeration -->
+  <xs:simpleType name="ArcDirectionEnum">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="CW"/>
+      <xs:enumeration value="CCW"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Spiral Properties Type -->
+  <xs:complexType name="SpiralPropertiesType">
+    <xs:sequence>
+      <xs:element name="RadiusIn" type="xs:decimal"/>
+      <xs:element name="RadiusOut" type="xs:decimal"/>
+      <xs:element name="SpiralType" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Superelevation Type -->
+  <xs:complexType name="SuperelevationType">
+    <xs:sequence>
+      <xs:element name="CriticalStation" type="gt:CriticalStationType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="count" type="xs:nonNegativeInteger" use="required"/>
+  </xs:complexType>
+
+  <!-- Critical Station Type -->
+  <xs:complexType name="CriticalStationType">
+    <xs:sequence>
+      <xs:element name="TransitionType" type="xs:string"/>
+      <xs:element name="LeftSlope" type="xs:decimal"/>
+      <xs:element name="RightSlope" type="xs:decimal"/>
+    </xs:sequence>
+    <xs:attribute name="station" type="xs:decimal" use="required"/>
+  </xs:complexType>
+
+</xs:schema>
+

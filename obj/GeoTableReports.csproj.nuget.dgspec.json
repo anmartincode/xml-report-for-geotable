@@ -1,0 +1,62 @@
+{
+  "format": 1,
+  "restore": {
+    "/home/amartinez/.local/local/xml-report-for-geotable/GeoTableReports.csproj": {}
+  },
+  "projects": {
+    "/home/amartinez/.local/local/xml-report-for-geotable/GeoTableReports.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/amartinez/.local/local/xml-report-for-geotable/GeoTableReports.csproj",
+        "projectName": "GeoTableReports",
+        "projectPath": "/home/amartinez/.local/local/xml-report-for-geotable/GeoTableReports.csproj",
+        "packagesPath": "/home/amartinez/.nuget/packages/",
+        "outputPath": "/home/amartinez/.local/local/xml-report-for-geotable/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/home/amartinez/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net48"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net48": {
+            "targetAlias": "net48",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net48": {
+          "targetAlias": "net48",
+          "dependencies": {
+            "Microsoft.NETFramework.ReferenceAssemblies": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.0.3, )",
+              "autoReferenced": true
+            },
+            "iTextSharp.LGPLv2.Core": {
+              "target": "Package",
+              "version": "[3.4.4, )"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/8.0.416/RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

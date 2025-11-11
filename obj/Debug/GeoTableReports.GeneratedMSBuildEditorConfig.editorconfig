@@ -1,0 +1,5 @@
+is_global = true
+build_property.RootNamespace = GeoTableReports
+build_property.ProjectDir = /home/amartinez/.local/local/xml-report-for-geotable/
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 

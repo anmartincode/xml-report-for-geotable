@@ -1,0 +1,257 @@
+# Civil 3D Geotable XML Report Generator
+# .gitignore file
+
+# =============================================================================
+# Output Files
+# =============================================================================
+output/
+*.xml
+!sample_output.xml  # Keep the sample
+*.dwg.bak
+*.dwl
+*.dwl2
+
+# =============================================================================
+# Python
+# =============================================================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# =============================================================================
+# IDEs and Editors
+# =============================================================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# =============================================================================
+# Civil 3D / AutoCAD
+# =============================================================================
+# Drawing backup files
+*.bak
+*.dwl
+*.dwl2
+*.sv$
+
+# Plot files
+*.plt
+*.log
+
+# AutoCAD temporary files
+*.ac$
+*.dwk
+
+# Civil 3D data
+*.tmp
+*.$ac
+
+# =============================================================================
+# Dynamo
+# =============================================================================
+# Dynamo backup files
+*.dyn.backup
+*.dyf.backup
+
+# Dynamo temp files
+temp/
+*.tmp.dyn
+
+# Package manager
+packages/
+extra/
+
+# =============================================================================
+# Operating System
+# =============================================================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS (if using Mac for documentation/development)
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+.directory
+.Trash-*
+
+# =============================================================================
+# Project Specific
+# =============================================================================
+# Temporary test outputs
+test_output/
+temp_reports/
+*.test.xml
+
+# Large test drawings
+test_drawings/*.dwg
+!test_drawings/sample_small.dwg  # Keep small sample
+
+# Configuration overrides (local only)
+config.local.json
+config.user.json
+
+# Personal notes
+NOTES.txt
+TODO.local.md
+
+# Backup copies
+backup/
+*.backup
+
+# Development scratch files
+scratch/
+dev_test/
+
+# =============================================================================
+# Documentation Build
+# =============================================================================
+# Sphinx documentation
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# MkDocs
+site/
+
+# =============================================================================
+# Archives and Compressed Files
+# =============================================================================
+*.zip
+*.tar.gz
+*.rar
+*.7z
+!release/*.zip  # Keep release archives if present
+
+# =============================================================================
+# Logs and Databases
+# =============================================================================
+*.log
+*.sql
+*.sqlite
+*.db
+
+# =============================================================================
+# Credentials and Secrets (Important!)
+# =============================================================================
+*.key
+*.pem
+credentials.json
+secrets.json
+.env
+.env.local
+
+# =============================================================================
+# CI/CD
+# =============================================================================
+.github/workflows/
+.gitlab-ci.yml
+azure-pipelines.yml
+
+# =============================================================================
+# Miscellaneous
+# =============================================================================
+# Temporary files
+*.tmp
+*.temp
+
+# Node modules (if using any Node.js tools)
+node_modules/
+
+# Package files
+*.nupkg
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+
+
+
+
+
+
+
+

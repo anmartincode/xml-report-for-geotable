@@ -1,0 +1,3 @@
+/home/amartinez/.local/local/xml-report-for-geotable/obj/Debug/GeoTableReports.csproj.AssemblyReference.cache
+/home/amartinez/.local/local/xml-report-for-geotable/obj/Debug/GeoTableReports.GeneratedMSBuildEditorConfig.editorconfig
+/home/amartinez/.local/local/xml-report-for-geotable/obj/Debug/GeoTableReports.csproj.CoreCompileInputs.cache
