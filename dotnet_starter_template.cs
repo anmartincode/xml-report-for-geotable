@@ -565,6 +565,48 @@ namespace GeoTableReports
         }
 
         /// <summary>
+        /// Helper method to add a data row to horizontal alignment table (3 columns)
+        /// </summary>
+        private void AddHorizontalDataRow(Document document, string label, string station, double northing, double easting, PdfFont font)
+        {
+            iText.Layout.Element.Table dataTable = new iText.Layout.Element.Table(3);
+            dataTable.SetWidth(UnitValue.CreatePercentValue(100));
+
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{label}{station}").SetFont(font).SetFontSize(9))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{northing:F4}").SetFont(font).SetFontSize(9))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{easting:F4}").SetFont(font).SetFontSize(9))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+
+            document.Add(dataTable);
+        }
+
+        /// <summary>
+        /// Helper method to add a data row to vertical alignment table (2 columns)
+        /// </summary>
+        private void AddVerticalDataRow(Document document, string label, string station, double elevation, PdfFont font)
+        {
+            iText.Layout.Element.Table dataTable = new iText.Layout.Element.Table(2);
+            dataTable.SetWidth(UnitValue.CreatePercentValue(100));
+
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{label}{station}").SetFont(font).SetFontSize(9))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{elevation:F2}").SetFont(font).SetFontSize(9))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+
+            document.Add(dataTable);
+        }
+
+        /// <summary>
         /// Generate horizontal alignment report
         /// </summary>
         private void GenerateHorizontalReport(CivDb.Alignment alignment, string outputPath)
@@ -1302,30 +1344,33 @@ namespace GeoTableReports
                 string bearing = FormatBearing(line.Direction);
 
                 document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10));
+                document.Add(new Paragraph("\n").SetFontSize(5));
 
                 // Determine point labels based on position
                 if (index == 0)
-                    document.Add(new Paragraph($" POT ( ) {FormatStation(line.StartStation),15} {y1,15:F4} {x1,15:F4}").SetFont(normalFont).SetFontSize(10));
+                    AddHorizontalDataRow(document, "POT ( ) ", FormatStation(line.StartStation), y1, x1, normalFont);
                 else
-                    document.Add(new Paragraph($" PI  ( ) {FormatStation(line.StartStation),15} {y1,15:F4} {x1,15:F4}").SetFont(normalFont).SetFontSize(10));
+                    AddHorizontalDataRow(document, "PI  ( ) ", FormatStation(line.StartStation), y1, x1, normalFont);
 
                 // Check if next element exists to determine end point label
-                string endLabel = "PI  ";
+                string endLabel;
                 if (index < alignment.Entities.Count - 1)
                 {
                     var nextEntity = alignment.Entities[index + 1];
                     if (nextEntity.EntityType == AlignmentEntityType.Spiral)
-                        endLabel = "TS  ";
+                        endLabel = "TS  ( ) ";
                     else if (nextEntity.EntityType == AlignmentEntityType.Arc)
-                        endLabel = "PC  ";
+                        endLabel = "PC  ( ) ";
+                    else
+                        endLabel = "PI  ( ) ";
                 }
                 else
-                    endLabel = "POT ";
+                    endLabel = "POT ( ) ";
 
-                document.Add(new Paragraph($" {endLabel}( ) {FormatStation(line.EndStation),15} {y2,15:F4} {x2,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Tangent Direction: {bearing}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Tangent Length: {line.Length,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                AddHorizontalDataRow(document, endLabel, FormatStation(line.EndStation), y2, x2, normalFont);
+                document.Add(new Paragraph($"Tangent Direction: {bearing}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Tangent Length: {line.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph("\n").SetFontSize(5));
             }
             catch (System.Exception ex)
             {
@@ -1369,22 +1414,25 @@ namespace GeoTableReports
                 double tangent = arc.Radius * Math.Tan(Math.Abs(deltaRadians) / 2);
 
                 document.Add(new Paragraph("Element: Circular").SetFont(boldFont).SetFontSize(10));
-                document.Add(new Paragraph($" SC  ( ) {FormatStation(arc.StartStation),15} {y1,15:F4} {x1,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" PI  ( ) {FormatStation(midStation),15} {yMid,15:F4} {xMid,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" CC  ( ) {yc,32:F4} {xc,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" CS  ( ) {FormatStation(arc.EndStation),15} {y2,15:F4} {x2,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Radius: {arc.Radius,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Design Speed(mph): {50.0,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Cant(inches): {2.0,15:F3}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($"Degree of Curvature(Chord): {FormatAngle(5729.58 / arc.Radius)}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Length: {arc.Length,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Length(Chorded): {arc.Length,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Tangent: {tangent,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Chord: {chord,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Middle Ordinate: {middleOrdinate,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" External: {external,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                document.Add(new Paragraph("\n").SetFontSize(5));
+
+                AddHorizontalDataRow(document, "SC  ( ) ", FormatStation(arc.StartStation), y1, x1, normalFont);
+                AddHorizontalDataRow(document, "PI  ( ) ", FormatStation(midStation), yMid, xMid, normalFont);
+                AddHorizontalDataRow(document, "CC  ( ) ", "               ", yc, xc, normalFont);
+                AddHorizontalDataRow(document, "CS  ( ) ", FormatStation(arc.EndStation), y2, x2, normalFont);
+
+                document.Add(new Paragraph($"Radius: {arc.Radius:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Design Speed(mph): {50.0:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Cant(inches): {2.0:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Degree of Curvature(Chord): {FormatAngle(5729.58 / arc.Radius)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Length: {arc.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Length(Chorded): {arc.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Tangent: {tangent:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Chord: {chord:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Middle Ordinate: {middleOrdinate:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"External: {external:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph("\n").SetFontSize(5));
             }
             catch (System.Exception ex)
             {
@@ -1419,24 +1467,25 @@ namespace GeoTableReports
                 double radiusOut = spiral.RadiusOut > 0 ? spiral.RadiusOut : 0;
 
                 document.Add(new Paragraph("Element: Clothoid").SetFont(labelFont).SetFontSize(10));
+                document.Add(new Paragraph("\n").SetFontSize(5));
 
                 if (isEntry)
                 {
-                    document.Add(new Paragraph($" TS  ( ) {FormatStation(spiral.StartStation),15} {y1,15:F4} {x1,15:F4}").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph($" SPI ( ) {FormatStation((spiral.StartStation + spiral.EndStation) / 2),15} {yMid,15:F4} {xMid,15:F4}").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph($" SC  ( ) {FormatStation(spiral.EndStation),15} {y2,15:F4} {x2,15:F4}").SetFont(normalFont).SetFontSize(10));
+                    AddHorizontalDataRow(document, "TS  ( ) ", FormatStation(spiral.StartStation), y1, x1, normalFont);
+                    AddHorizontalDataRow(document, "SPI ( ) ", FormatStation((spiral.StartStation + spiral.EndStation) / 2), yMid, xMid, normalFont);
+                    AddHorizontalDataRow(document, "SC  ( ) ", FormatStation(spiral.EndStation), y2, x2, normalFont);
                 }
                 else
                 {
-                    document.Add(new Paragraph($" CS  ( ) {FormatStation(spiral.StartStation),15} {y1,15:F4} {x1,15:F4}").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph($" SPI ( ) {FormatStation((spiral.StartStation + spiral.EndStation) / 2),15} {yMid,15:F4} {xMid,15:F4}").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph($" ST  ( ) {FormatStation(spiral.EndStation),15} {y2,15:F4} {x2,15:F4}").SetFont(normalFont).SetFontSize(10));
+                    AddHorizontalDataRow(document, "CS  ( ) ", FormatStation(spiral.StartStation), y1, x1, normalFont);
+                    AddHorizontalDataRow(document, "SPI ( ) ", FormatStation((spiral.StartStation + spiral.EndStation) / 2), yMid, xMid, normalFont);
+                    AddHorizontalDataRow(document, "ST  ( ) ", FormatStation(spiral.EndStation), y2, x2, normalFont);
                 }
 
-                document.Add(new Paragraph($" Entrance Radius: {radiusIn,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Exit Radius: {radiusOut,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Length: {spiral.Length,15:F4}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                document.Add(new Paragraph($"Entrance Radius: {radiusIn:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Exit Radius: {radiusOut:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Length: {spiral.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph("\n").SetFontSize(5));
             }
             catch (System.Exception ex)
             {
@@ -1648,7 +1697,7 @@ namespace GeoTableReports
                 }
 
                 document.Add(new Paragraph("Element: Linear").SetFont(labelFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                document.Add(new Paragraph("\n").SetFontSize(5));
 
                 // Get properties safely
                 double startStation = 0;
@@ -1667,12 +1716,12 @@ namespace GeoTableReports
 
                 // Determine point labels
                 if (index == 0)
-                    document.Add(new Paragraph($" POB {FormatStation(startStation),15} {startElevation,15:F2}").SetFont(normalFont).SetFontSize(10));
+                    AddVerticalDataRow(document, "POB ", FormatStation(startStation), startElevation, normalFont);
 
-                document.Add(new Paragraph($" PVI {FormatStation(endStation),15} {endElevation,15:F2}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Tangent Grade: {grade * 100,15:F3}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Tangent Length: {length,15:F2}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                AddVerticalDataRow(document, "PVI ", FormatStation(endStation), endElevation, normalFont);
+                document.Add(new Paragraph($"Tangent Grade: {grade * 100:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Tangent Length: {length:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph("\n").SetFontSize(5));
             }
             catch (System.Exception ex)
             {
@@ -1743,24 +1792,27 @@ namespace GeoTableReports
                 }
 
                 document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10));
-                document.Add(new Paragraph($" PVC {FormatStation(startStation),15} {pvcElevation,15:F2}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" PVI {FormatStation(pviStation),15} {pviElevation,15:F2}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" PVT {FormatStation(endStation),15} {pvtElevation,15:F2}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Length: {length,15:F2}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n").SetFontSize(5));
+
+                AddVerticalDataRow(document, "PVC ", FormatStation(startStation), pvcElevation, normalFont);
+                AddVerticalDataRow(document, "PVI ", FormatStation(pviStation), pviElevation, normalFont);
+                AddVerticalDataRow(document, "PVT ", FormatStation(endStation), pvtElevation, normalFont);
+
+                document.Add(new Paragraph($"Length: {length:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
 
                 double gradeChange = Math.Abs(gradeDiff);
                 if (gradeChange > 1.0)
-                    document.Add(new Paragraph($" Stopping Sight Distance: {571.52,15:F2}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($"Stopping Sight Distance: {571.52:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 else
-                    document.Add(new Paragraph($" Headlight Sight Distance: {540.41,15:F2}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($"Headlight Sight Distance: {540.41:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
 
-                document.Add(new Paragraph($" Entrance Grade: {gradeIn,15:F3}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Exit Grade: {gradeOut,15:F3}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" r = ( g2 - g1 ) / L: {r,15:F3}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($"Entrance Grade: {gradeIn:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Exit Grade: {gradeOut:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"r = ( g2 - g1 ) / L: {r:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F3") : "INF";
-                document.Add(new Paragraph($" K = l / ( g2 - g1 ): {kDisplay,15}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($" Middle Ordinate: {middleOrdinate,15:F2}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                document.Add(new Paragraph($"K = l / ( g2 - g1 ): {kDisplay}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Middle Ordinate: {middleOrdinate:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph("\n").SetFontSize(5));
             }
             catch (System.Exception ex)
             {
