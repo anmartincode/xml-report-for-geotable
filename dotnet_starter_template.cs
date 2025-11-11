@@ -24,6 +24,7 @@ using iText.Layout.Properties;
 using iText.Layout.Borders;
 using iText.Kernel.Font;
 using iText.IO.Font.Constants;
+using iText.Kernel.Colors;
 
 [assembly: CommandClass(typeof(GeoTableReports.ReportCommands))]
 
@@ -570,17 +571,28 @@ namespace GeoTableReports
         /// </summary>
         private void AddHorizontalDataRow(Document document, string label, string station, double northing, double easting, PdfFont font)
         {
-            iText.Layout.Element.Table dataTable = new iText.Layout.Element.Table(3);
+            // 4-column layout with a subtle divider before numeric columns:
+            // [ LABEL | STATION | NORTHING | EASTING ]
+            iText.Layout.Element.Table dataTable = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(new float[] { 35f, 25f, 20f, 20f }));
             dataTable.SetWidth(UnitValue.CreatePercentValue(100));
 
-            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{label}{station}").SetFont(font).SetFontSize(9))
+            // LABEL (left-aligned)
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(label).SetFont(font).SetFontSize(9))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT)
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+
+            // STATION (right-aligned under the STATION header)
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(station).SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
 
+            // NORTHING with left-divider
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{northing:F4}").SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
-                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f)));
 
+            // EASTING
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{easting:F4}").SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
@@ -602,7 +614,8 @@ namespace GeoTableReports
 
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{elevation:F2}").SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
-                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f)));
 
             document.Add(dataTable);
         }
@@ -1253,22 +1266,33 @@ namespace GeoTableReports
                     .SetFont(normalFont).SetFontSize(10));
                 document.Add(new Paragraph("\n"));
 
-                // Add column headers
-                iText.Layout.Element.Table headerTable = new iText.Layout.Element.Table(3);
+                // Add column headers with subtle divider (left border) before numeric columns
+                iText.Layout.Element.Table headerTable = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(new float[] { 35f, 25f, 20f, 20f }));
                 headerTable.SetWidth(UnitValue.CreatePercentValue(100));
 
+                // LABEL header placeholder (blank, aligns with labels like POT/PI)
+                iText.Layout.Element.Cell labelHeader = new iText.Layout.Element.Cell().Add(new Paragraph(" ")
+                    .SetFont(boldFont).SetFontSize(10))
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT)
+                    .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+                headerTable.AddCell(labelHeader);
+
+                // STATION header (second column)
                 iText.Layout.Element.Cell cell1 = new iText.Layout.Element.Cell().Add(new Paragraph("STATION")
                     .SetFont(boldFont).SetFontSize(10))
                     .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                     .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
                 headerTable.AddCell(cell1);
 
+                // NORTHING header
                 iText.Layout.Element.Cell cell2 = new iText.Layout.Element.Cell().Add(new Paragraph("NORTHING")
                     .SetFont(boldFont).SetFontSize(10))
                     .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
-                    .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+                    .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                    .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f));
                 headerTable.AddCell(cell2);
 
+                // EASTING header
                 iText.Layout.Element.Cell cell3 = new iText.Layout.Element.Cell().Add(new Paragraph("EASTING")
                     .SetFont(boldFont).SetFontSize(10))
                     .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)

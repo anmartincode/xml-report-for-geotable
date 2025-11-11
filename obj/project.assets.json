@@ -4860,11 +4860,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\anmartinez\\.vscode\\local\\xml-report-for-geotable\\xml-report-for-geotable\\GeoTableReports.csproj",
+      "projectUniqueName": "C:\\Users\\anmartinez\\.vscode\\local\\xml-report-for-geotable\\GeoTableReports.csproj",
       "projectName": "GeoTableReports",
-      "projectPath": "C:\\Users\\anmartinez\\.vscode\\local\\xml-report-for-geotable\\xml-report-for-geotable\\GeoTableReports.csproj",
+      "projectPath": "C:\\Users\\anmartinez\\.vscode\\local\\xml-report-for-geotable\\GeoTableReports.csproj",
       "packagesPath": "C:\\Users\\anmartinez\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\anmartinez\\.vscode\\local\\xml-report-for-geotable\\xml-report-for-geotable\\obj\\",
+      "outputPath": "C:\\Users\\anmartinez\\.vscode\\local\\xml-report-for-geotable\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\anmartinez\\AppData\\Roaming\\NuGet\\NuGet.Config"
