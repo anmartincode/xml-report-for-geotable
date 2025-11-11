@@ -11,6 +11,7 @@
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
     <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
     <UseWindowsForms>true</UseWindowsForms>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <!-- Civil 3D Installation Path Detection -->
@@ -54,15 +55,26 @@
 
   <!-- NuGet Packages for PDF Generation -->
   <ItemGroup>
-    <PackageReference Include="iTextSharp.LGPLv2.Core" Version="3.4.4" />
+    <PackageReference Include="itext7" Version="8.0.5" />
+    <PackageReference Include="itext7.bouncy-castle-adapter" Version="8.0.5" />
     <PackageReference Include="NETStandard.Library" Version="2.0.3" />
   </ItemGroup>
 
   <!-- Post-Build: Copy to Civil 3D Plugins -->
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(Civil3DPath)' != ''">
-    <Message Text="Copying $(TargetFileName) to Civil 3D plugins folder..." Importance="high" />
+    <Message Text="Copying $(TargetFileName) and dependencies to Civil 3D plugins folder..." Importance="high" />
     <MakeDir Directories="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2025" />
+
+    <!-- Copy main DLL -->
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2025" />
+
+    <!-- Copy all dependencies (including iTextSharp) -->
+    <ItemGroup>
+      <DependencyFiles Include="$(OutDir)*.dll" Exclude="$(TargetPath)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DependencyFiles)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2025" SkipUnchangedFiles="true" />
+
+    <!-- Copy PackageContents.xml -->
     <Copy SourceFiles="$(ProjectDir)PackageContents.xml" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle" Condition="Exists('$(ProjectDir)PackageContents.xml')" />
   </Target>
 

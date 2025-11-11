@@ -7,6 +7,7 @@
 
 using System;
 using System.Windows.Forms;
+using System.Xml.Linq;
 using Autodesk.AutoCAD.Runtime;
 using AcApp = Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -15,6 +16,13 @@ using Autodesk.Civil.ApplicationServices;
 using CivApp = Autodesk.Civil.ApplicationServices;
 using Autodesk.Civil.DatabaseServices;
 using CivDb = Autodesk.Civil.DatabaseServices;
+using iText.Kernel.Pdf;
+using iText.Layout;
+using iText.Layout.Element;
+using iText.Layout.Properties;
+using iText.Layout.Borders;
+using iText.Kernel.Font;
+using iText.IO.Font.Constants;
 
 [assembly: CommandClass(typeof(GeoTableReports.ReportCommands))]
 
@@ -93,27 +101,41 @@ namespace GeoTableReports
 
                             try
                             {
+                                // Detect format from file extension
+                                string extension = System.IO.Path.GetExtension(outputPath).ToLower();
+                                bool isXml = extension == ".xml";
+                                bool isPdf = extension == ".pdf";
+
                                 if (reportType == "Vertical")
                                 {
-                                    GenerateVerticalReport(alignment, outputPath);
+                                    if (isXml)
+                                        GenerateVerticalReportXml(alignment, outputPath);
+                                    else if (isPdf)
+                                        GenerateVerticalReportPdf(alignment, outputPath);
+                                    else
+                                        GenerateVerticalReport(alignment, outputPath);
                                 }
                                 else
                                 {
-                                    GenerateHorizontalReport(alignment, outputPath);
+                                    if (isXml)
+                                        GenerateHorizontalReportXml(alignment, outputPath);
+                                    else if (isPdf)
+                                        GenerateHorizontalReportPdf(alignment, outputPath);
+                                    else
+                                        GenerateHorizontalReport(alignment, outputPath);
                                 }
 
                                 tr.Commit();
 
-                                // Show success message with actual file path (.txt)
-                                string actualPath = outputPath.Replace(".pdf", ".txt");
+                                // Show success message
                                 MessageBox.Show(
-                                    $"Report generated successfully!\n\nSaved to: {actualPath}",
+                                    $"Report generated successfully!\n\nSaved to: {outputPath}",
                                     "Success",
                                     MessageBoxButtons.OK,
                                     MessageBoxIcon.Information
                                 );
 
-                                ed.WriteMessage($"\n✓ Report saved to: {actualPath}");
+                                ed.WriteMessage($"\n✓ Report saved to: {outputPath}");
                             }
                             catch (System.Exception reportEx)
                             {
@@ -338,7 +360,7 @@ namespace GeoTableReports
                     }
                     catch { }
 
-                    using (System.IO.StreamWriter writer = new System.IO.StreamWriter(outputPath.Replace(".pdf", ".txt")))
+                    using (System.IO.StreamWriter writer = new System.IO.StreamWriter(outputPath))
                     {
                         // Write header
                         writer.WriteLine($"Project Name: {projectName}");
@@ -564,7 +586,7 @@ namespace GeoTableReports
                     projectName = "Unknown Project";
                 }
 
-                using (System.IO.StreamWriter writer = new System.IO.StreamWriter(outputPath.Replace(".pdf", ".txt")))
+                using (System.IO.StreamWriter writer = new System.IO.StreamWriter(outputPath))
                 {
                     // Write header
                     writer.WriteLine($"Project Name: {projectName}");
@@ -830,6 +852,931 @@ namespace GeoTableReports
             return $"{deg}^{min:D2}'{sec:F4}\"";
         }
 
+        /// <summary>
+        /// Generate horizontal alignment report in XML format
+        /// </summary>
+        private void GenerateHorizontalReportXml(CivDb.Alignment alignment, string outputPath)
+        {
+            try
+            {
+                // Get project name
+                Database db = alignment.Database;
+                string projectName = "";
+                try
+                {
+                    if (db.Filename != null && db.Filename.Length > 0)
+                    {
+                        projectName = System.IO.Path.GetFileNameWithoutExtension(db.Filename);
+                    }
+                }
+                catch
+                {
+                    projectName = "Unknown Project";
+                }
+
+                // Create XML document
+                XDocument doc = new XDocument(
+                    new XDeclaration("1.0", "utf-8", "yes"),
+                    new XElement("GeoTableReport",
+                        new XAttribute("Type", "Horizontal"),
+                        new XElement("Project",
+                            new XElement("Name", projectName),
+                            new XElement("Description", "")
+                        ),
+                        new XElement("HorizontalAlignment",
+                            new XElement("Name", alignment.Name),
+                            new XElement("Description", alignment.Description ?? ""),
+                            new XElement("Style", alignment.StyleName ?? "Default")
+                        ),
+                        new XElement("Elements",
+                            GetHorizontalElementsXml(alignment)
+                        )
+                    )
+                );
+
+                doc.Save(outputPath);
+            }
+            catch (System.Exception ex)
+            {
+                throw new System.Exception($"Error in GenerateHorizontalReportXml: {ex.Message}", ex);
+            }
+        }
+
+        private System.Collections.Generic.IEnumerable<XElement> GetHorizontalElementsXml(CivDb.Alignment alignment)
+        {
+            var elements = new System.Collections.Generic.List<XElement>();
+
+            for (int i = 0; i < alignment.Entities.Count; i++)
+            {
+                AlignmentEntity entity = alignment.Entities[i];
+                if (entity == null) continue;
+
+                try
+                {
+                    switch (entity.EntityType)
+                    {
+                        case AlignmentEntityType.Line:
+                            var line = entity as AlignmentLine;
+                            if (line != null)
+                            {
+                                double x1 = 0, y1 = 0, z1 = 0;
+                                double x2 = 0, y2 = 0, z2 = 0;
+                                alignment.PointLocation(line.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                                alignment.PointLocation(line.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+                                elements.Add(new XElement("Line",
+                                    new XElement("StartStation", line.StartStation),
+                                    new XElement("EndStation", line.EndStation),
+                                    new XElement("Length", line.Length),
+                                    new XElement("Direction", line.Direction),
+                                    new XElement("Bearing", FormatBearing(line.Direction)),
+                                    new XElement("StartPoint",
+                                        new XElement("Northing", y1),
+                                        new XElement("Easting", x1)
+                                    ),
+                                    new XElement("EndPoint",
+                                        new XElement("Northing", y2),
+                                        new XElement("Easting", x2)
+                                    )
+                                ));
+                            }
+                            break;
+
+                        case AlignmentEntityType.Arc:
+                            var arc = entity as AlignmentArc;
+                            if (arc != null)
+                            {
+                                double x1 = 0, y1 = 0, z1 = 0;
+                                double x2 = 0, y2 = 0, z2 = 0;
+                                double xc = 0, yc = 0, zc = 0;
+                                alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                                alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+                                double midStation = (arc.StartStation + arc.EndStation) / 2;
+                                double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
+                                alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
+
+                                double deltaRadians = arc.Delta;
+                                double deltaDegrees = deltaRadians * (180.0 / Math.PI);
+
+                                elements.Add(new XElement("Arc",
+                                    new XElement("StartStation", arc.StartStation),
+                                    new XElement("EndStation", arc.EndStation),
+                                    new XElement("Length", arc.Length),
+                                    new XElement("Radius", arc.Radius),
+                                    new XElement("Delta", Math.Abs(deltaDegrees)),
+                                    new XElement("Direction", arc.Clockwise ? "Right" : "Left"),
+                                    new XElement("StartPoint",
+                                        new XElement("Northing", y1),
+                                        new XElement("Easting", x1)
+                                    ),
+                                    new XElement("EndPoint",
+                                        new XElement("Northing", y2),
+                                        new XElement("Easting", x2)
+                                    ),
+                                    new XElement("CenterPoint",
+                                        new XElement("Northing", yc),
+                                        new XElement("Easting", xc)
+                                    )
+                                ));
+                            }
+                            break;
+
+                        case AlignmentEntityType.Spiral:
+                            var spiral = entity as AlignmentSpiral;
+                            if (spiral != null)
+                            {
+                                double x1 = 0, y1 = 0, z1 = 0;
+                                double x2 = 0, y2 = 0, z2 = 0;
+                                alignment.PointLocation(spiral.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                                alignment.PointLocation(spiral.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+                                elements.Add(new XElement("Spiral",
+                                    new XElement("StartStation", spiral.StartStation),
+                                    new XElement("EndStation", spiral.EndStation),
+                                    new XElement("Length", spiral.Length),
+                                    new XElement("RadiusIn", spiral.RadiusIn),
+                                    new XElement("RadiusOut", spiral.RadiusOut),
+                                    new XElement("StartPoint",
+                                        new XElement("Northing", y1),
+                                        new XElement("Easting", x1)
+                                    ),
+                                    new XElement("EndPoint",
+                                        new XElement("Northing", y2),
+                                        new XElement("Easting", x2)
+                                    )
+                                ));
+                            }
+                            break;
+                    }
+                }
+                catch
+                {
+                    // Skip elements that can't be processed
+                }
+            }
+
+            return elements;
+        }
+
+        /// <summary>
+        /// Generate vertical alignment report in XML format
+        /// </summary>
+        private void GenerateVerticalReportXml(CivDb.Alignment alignment, string outputPath)
+        {
+            try
+            {
+                // Get project name
+                Database db = alignment.Database;
+                string projectName = "";
+                try
+                {
+                    if (db.Filename != null && db.Filename.Length > 0)
+                    {
+                        projectName = System.IO.Path.GetFileNameWithoutExtension(db.Filename);
+                    }
+                }
+                catch
+                {
+                    projectName = "Unknown Project";
+                }
+
+                // Get first layout profile ID
+                ObjectId layoutProfileId = ObjectId.Null;
+                foreach (ObjectId profileId in alignment.GetProfileIds())
+                {
+                    using (Profile profile = profileId.GetObject(OpenMode.ForRead) as Profile)
+                    {
+                        if (profile != null && profile.Entities != null && profile.Entities.Count > 0)
+                        {
+                            layoutProfileId = profileId;
+                            break;
+                        }
+                    }
+                }
+
+                if (layoutProfileId == ObjectId.Null)
+                {
+                    AcApp.Application.DocumentManager.MdiActiveDocument.Editor.WriteMessage("\nNo layout profile found.");
+                    return;
+                }
+
+                // Open the profile and generate report
+                using (Profile layoutProfile = layoutProfileId.GetObject(OpenMode.ForRead) as Profile)
+                {
+                    if (layoutProfile == null)
+                    {
+                        AcApp.Application.DocumentManager.MdiActiveDocument.Editor.WriteMessage("\nError accessing profile.");
+                        return;
+                    }
+
+                    // Create XML document
+                    XDocument doc = new XDocument(
+                        new XDeclaration("1.0", "utf-8", "yes"),
+                        new XElement("GeoTableReport",
+                            new XAttribute("Type", "Vertical"),
+                            new XElement("Project",
+                                new XElement("Name", projectName),
+                                new XElement("Description", "")
+                            ),
+                            new XElement("HorizontalAlignment",
+                                new XElement("Name", alignment.Name),
+                                new XElement("Description", alignment.Description ?? ""),
+                                new XElement("Style", alignment.StyleName ?? "Default")
+                            ),
+                            new XElement("VerticalAlignment",
+                                new XElement("Name", layoutProfile.Name),
+                                new XElement("Description", layoutProfile.Description ?? ""),
+                                new XElement("Style", layoutProfile.StyleName ?? "Default")
+                            ),
+                            new XElement("Elements",
+                                GetVerticalElementsXml(layoutProfile)
+                            )
+                        )
+                    );
+
+                    doc.Save(outputPath);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                throw new System.Exception($"Error in GenerateVerticalReportXml: {ex.Message}", ex);
+            }
+        }
+
+        private System.Collections.Generic.IEnumerable<XElement> GetVerticalElementsXml(Profile profile)
+        {
+            var elements = new System.Collections.Generic.List<XElement>();
+
+            for (int i = 0; i < profile.Entities.Count; i++)
+            {
+                ProfileEntity entity = profile.Entities[i];
+                if (entity == null) continue;
+
+                try
+                {
+                    switch (entity.EntityType)
+                    {
+                        case ProfileEntityType.Tangent:
+                            var tangent = entity as ProfileTangent;
+                            if (tangent != null)
+                            {
+                                elements.Add(new XElement("Tangent",
+                                    new XElement("StartStation", tangent.StartStation),
+                                    new XElement("EndStation", tangent.EndStation),
+                                    new XElement("StartElevation", tangent.StartElevation),
+                                    new XElement("EndElevation", tangent.EndElevation),
+                                    new XElement("Grade", tangent.Grade * 100),
+                                    new XElement("Length", tangent.Length)
+                                ));
+                            }
+                            break;
+
+                        case ProfileEntityType.Circular:
+                            var curve = entity as ProfileCircular;
+                            if (curve != null)
+                            {
+                                double gradeIn = curve.GradeIn * 100;
+                                double gradeOut = curve.GradeOut * 100;
+                                double r = (gradeOut - gradeIn) / curve.Length;
+                                double k = curve.Length / (gradeOut - gradeIn);
+
+                                elements.Add(new XElement("Parabola",
+                                    new XElement("StartStation", curve.StartStation),
+                                    new XElement("EndStation", curve.EndStation),
+                                    new XElement("PVIStation", curve.PVIStation),
+                                    new XElement("PVIElevation", curve.PVIElevation),
+                                    new XElement("Length", curve.Length),
+                                    new XElement("GradeIn", gradeIn),
+                                    new XElement("GradeOut", gradeOut),
+                                    new XElement("RateOfChange", r),
+                                    new XElement("K", Math.Abs(k))
+                                ));
+                            }
+                            break;
+                    }
+                }
+                catch
+                {
+                    // Skip elements that can't be processed
+                }
+            }
+
+            return elements;
+        }
+
+        /// <summary>
+        /// Generate horizontal alignment report in PDF format
+        /// </summary>
+        private void GenerateHorizontalReportPdf(CivDb.Alignment alignment, string outputPath)
+        {
+            try
+            {
+                // Get project name
+                Database db = alignment.Database;
+                string projectName = "";
+                try
+                {
+                    if (db.Filename != null && db.Filename.Length > 0)
+                    {
+                        projectName = System.IO.Path.GetFileNameWithoutExtension(db.Filename);
+                    }
+                }
+                catch
+                {
+                    projectName = "Unknown Project";
+                }
+
+                // Create PDF document using iText7
+                PdfWriter writer = new PdfWriter(outputPath);
+                PdfDocument pdf = new PdfDocument(writer);
+                Document document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
+                document.SetMargins(50, 50, 50, 50);
+
+                // Define fonts
+                PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+                PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+
+                // Add title and header info
+                document.Add(new Paragraph($"Project Name: {projectName}")
+                    .SetFont(boldFont).SetFontSize(11));
+                document.Add(new Paragraph(" Description:")
+                    .SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($"Horizontal Alignment Name: {alignment.Name}")
+                    .SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Description: {alignment.Description ?? ""}")
+                    .SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Style: {alignment.StyleName ?? "Default"}")
+                    .SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+
+                // Add column headers
+                iText.Layout.Element.Table headerTable = new iText.Layout.Element.Table(3);
+                headerTable.SetWidth(UnitValue.CreatePercentValue(100));
+
+                iText.Layout.Element.Cell cell1 = new iText.Layout.Element.Cell().Add(new Paragraph("STATION")
+                    .SetFont(boldFont).SetFontSize(10))
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                    .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+                headerTable.AddCell(cell1);
+
+                iText.Layout.Element.Cell cell2 = new iText.Layout.Element.Cell().Add(new Paragraph("NORTHING")
+                    .SetFont(boldFont).SetFontSize(10))
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                    .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+                headerTable.AddCell(cell2);
+
+                iText.Layout.Element.Cell cell3 = new iText.Layout.Element.Cell().Add(new Paragraph("EASTING")
+                    .SetFont(boldFont).SetFontSize(10))
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                    .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+                headerTable.AddCell(cell3);
+
+                document.Add(headerTable);
+                document.Add(new Paragraph("\n"));
+
+                // Process each entity
+                for (int i = 0; i < alignment.Entities.Count; i++)
+                {
+                    AlignmentEntity entity = alignment.Entities[i];
+                    if (entity == null) continue;
+
+                    try
+                    {
+                        switch (entity.EntityType)
+                        {
+                            case AlignmentEntityType.Line:
+                                WriteLinearElementPdf(document, entity as AlignmentLine, alignment, i, normalFont, boldFont);
+                                break;
+                            case AlignmentEntityType.Arc:
+                                WriteArcElementPdf(document, entity as AlignmentArc, alignment, i, normalFont, boldFont);
+                                break;
+                            case AlignmentEntityType.Spiral:
+                                WriteSpiralElementPdf(document, entity as AlignmentSpiral, alignment, i, normalFont, boldFont);
+                                break;
+                            default:
+                                document.Add(new Paragraph($"Element: {entity.EntityType}").SetFont(normalFont).SetFontSize(10));
+                                document.Add(new Paragraph("Unsupported element type.").SetFont(normalFont).SetFontSize(10));
+                                document.Add(new Paragraph("\n"));
+                                break;
+                        }
+                    }
+                    catch (System.Exception ex)
+                    {
+                        document.Add(new Paragraph($"Error processing entity {i}: {ex.Message}").SetFont(normalFont).SetFontSize(10));
+                        document.Add(new Paragraph("\n"));
+                    }
+                }
+
+                document.Close();
+            }
+            catch (System.Exception ex)
+            {
+                string errorDetails = $"Error in GenerateHorizontalReportPdf: {ex.GetType().Name} - {ex.Message}";
+                if (ex.InnerException != null)
+                {
+                    errorDetails += $"\nInner Exception: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}";
+                }
+                errorDetails += $"\nStack Trace: {ex.StackTrace}";
+                throw new System.Exception(errorDetails, ex);
+            }
+        }
+
+        private void WriteLinearElementPdf(Document document, AlignmentLine line, CivDb.Alignment alignment, int index, PdfFont normalFont, PdfFont boldFont)
+        {
+            if (line == null)
+            {
+                document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10));
+                document.Add(new Paragraph("Unable to read line data for this alignment element.").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+                return;
+            }
+
+            try
+            {
+                double x1 = 0, y1 = 0, z1 = 0;
+                double x2 = 0, y2 = 0, z2 = 0;
+                alignment.PointLocation(line.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                alignment.PointLocation(line.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+                string bearing = FormatBearing(line.Direction);
+
+                document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10));
+
+                // Determine point labels based on position
+                if (index == 0)
+                    document.Add(new Paragraph($" POT ( ) {FormatStation(line.StartStation),15} {y1,15:F4} {x1,15:F4}").SetFont(normalFont).SetFontSize(10));
+                else
+                    document.Add(new Paragraph($" PI  ( ) {FormatStation(line.StartStation),15} {y1,15:F4} {x1,15:F4}").SetFont(normalFont).SetFontSize(10));
+
+                // Check if next element exists to determine end point label
+                string endLabel = "PI  ";
+                if (index < alignment.Entities.Count - 1)
+                {
+                    var nextEntity = alignment.Entities[index + 1];
+                    if (nextEntity.EntityType == AlignmentEntityType.Spiral)
+                        endLabel = "TS  ";
+                    else if (nextEntity.EntityType == AlignmentEntityType.Arc)
+                        endLabel = "PC  ";
+                }
+                else
+                    endLabel = "POT ";
+
+                document.Add(new Paragraph($" {endLabel}( ) {FormatStation(line.EndStation),15} {y2,15:F4} {x2,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Tangent Direction: {bearing}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Tangent Length: {line.Length,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+            catch (System.Exception ex)
+            {
+                document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10));
+                document.Add(new Paragraph($"Error writing line data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+        }
+
+        private void WriteArcElementPdf(Document document, AlignmentArc arc, CivDb.Alignment alignment, int index, PdfFont normalFont, PdfFont boldFont)
+        {
+            if (arc == null)
+            {
+                document.Add(new Paragraph("Element: Circular").SetFont(boldFont).SetFontSize(10));
+                document.Add(new Paragraph("Unable to read arc data for this alignment element.").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+                return;
+            }
+
+            try
+            {
+                double x1 = 0, y1 = 0, z1 = 0;
+                double x2 = 0, y2 = 0, z2 = 0;
+                double xc = 0, yc = 0, zc = 0;
+                double xMid = 0, yMid = 0, zMid = 0;
+
+                alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
+                alignment.PointLocation((arc.StartStation + arc.EndStation) / 2, 0, 0, ref xMid, ref yMid, ref zMid);
+
+                // Calculate center point
+                double midStation = (arc.StartStation + arc.EndStation) / 2;
+                double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
+                alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
+
+                double deltaRadians = arc.Delta;
+                double deltaDegrees = deltaRadians * (180.0 / Math.PI);
+                double chord = 2 * arc.Radius * Math.Sin(Math.Abs(deltaRadians) / 2);
+                double middleOrdinate = arc.Radius * (1 - Math.Cos(Math.Abs(deltaRadians) / 2));
+                double external = arc.Radius * (1 / Math.Cos(Math.Abs(deltaRadians) / 2) - 1);
+                double tangent = arc.Radius * Math.Tan(Math.Abs(deltaRadians) / 2);
+
+                document.Add(new Paragraph("Element: Circular").SetFont(boldFont).SetFontSize(10));
+                document.Add(new Paragraph($" SC  ( ) {FormatStation(arc.StartStation),15} {y1,15:F4} {x1,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" PI  ( ) {FormatStation(midStation),15} {yMid,15:F4} {xMid,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" CC  ( ) {yc,32:F4} {xc,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" CS  ( ) {FormatStation(arc.EndStation),15} {y2,15:F4} {x2,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Radius: {arc.Radius,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Design Speed(mph): {50.0,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Cant(inches): {2.0,15:F3}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($"Degree of Curvature(Chord): {FormatAngle(5729.58 / arc.Radius)}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Length: {arc.Length,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Length(Chorded): {arc.Length,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Tangent: {tangent,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Chord: {chord,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Middle Ordinate: {middleOrdinate,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" External: {external,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+            catch (System.Exception ex)
+            {
+                document.Add(new Paragraph("Element: Circular").SetFont(boldFont).SetFontSize(10));
+                document.Add(new Paragraph($"Error writing arc data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+        }
+
+        private void WriteSpiralElementPdf(Document document, AlignmentSpiral spiral, CivDb.Alignment alignment, int index, PdfFont normalFont, PdfFont labelFont)
+        {
+            if (spiral == null)
+            {
+                document.Add(new Paragraph("Element: Clothoid").SetFont(labelFont).SetFontSize(10));
+                document.Add(new Paragraph("Unable to read spiral data for this alignment element.").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+                return;
+            }
+
+            try
+            {
+                double x1 = 0, y1 = 0, z1 = 0;
+                double x2 = 0, y2 = 0, z2 = 0;
+                double xMid = 0, yMid = 0, zMid = 0;
+
+                alignment.PointLocation(spiral.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                alignment.PointLocation(spiral.EndStation, 0, 0, ref x2, ref y2, ref z2);
+                alignment.PointLocation((spiral.StartStation + spiral.EndStation) / 2, 0, 0, ref xMid, ref yMid, ref zMid);
+
+                bool isEntry = spiral.RadiusIn > spiral.RadiusOut || (spiral.RadiusIn == 0 && spiral.RadiusOut > 0);
+                double radiusIn = spiral.RadiusIn > 0 ? spiral.RadiusIn : 0;
+                double radiusOut = spiral.RadiusOut > 0 ? spiral.RadiusOut : 0;
+
+                document.Add(new Paragraph("Element: Clothoid").SetFont(labelFont).SetFontSize(10));
+
+                if (isEntry)
+                {
+                    document.Add(new Paragraph($" TS  ( ) {FormatStation(spiral.StartStation),15} {y1,15:F4} {x1,15:F4}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($" SPI ( ) {FormatStation((spiral.StartStation + spiral.EndStation) / 2),15} {yMid,15:F4} {xMid,15:F4}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($" SC  ( ) {FormatStation(spiral.EndStation),15} {y2,15:F4} {x2,15:F4}").SetFont(normalFont).SetFontSize(10));
+                }
+                else
+                {
+                    document.Add(new Paragraph($" CS  ( ) {FormatStation(spiral.StartStation),15} {y1,15:F4} {x1,15:F4}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($" SPI ( ) {FormatStation((spiral.StartStation + spiral.EndStation) / 2),15} {yMid,15:F4} {xMid,15:F4}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($" ST  ( ) {FormatStation(spiral.EndStation),15} {y2,15:F4} {x2,15:F4}").SetFont(normalFont).SetFontSize(10));
+                }
+
+                document.Add(new Paragraph($" Entrance Radius: {radiusIn,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Exit Radius: {radiusOut,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Length: {spiral.Length,15:F4}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+            catch (System.Exception ex)
+            {
+                document.Add(new Paragraph("Element: Clothoid").SetFont(labelFont).SetFontSize(10));
+                document.Add(new Paragraph($"Error writing spiral data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+        }
+
+        /// <summary>
+        /// Generate vertical alignment report in PDF format
+        /// </summary>
+        private void GenerateVerticalReportPdf(CivDb.Alignment alignment, string outputPath)
+        {
+            try
+            {
+                if (alignment == null)
+                {
+                    throw new System.ArgumentNullException(nameof(alignment), "Alignment object is null");
+                }
+
+                // Get project name from drawing properties
+                Database db = null;
+                string projectName = "Unknown Project";
+                try
+                {
+                    db = alignment.Database;
+                    if (db != null && !string.IsNullOrEmpty(db.Filename))
+                    {
+                        projectName = System.IO.Path.GetFileNameWithoutExtension(db.Filename);
+                    }
+                }
+                catch
+                {
+                    projectName = "Unknown Project";
+                }
+
+                // Get alignment properties safely
+                string alignmentName = "";
+                string alignmentDescription = "";
+                string alignmentStyle = "Default";
+                try
+                {
+                    alignmentName = alignment?.Name ?? "";
+                }
+                catch { }
+                try
+                {
+                    alignmentDescription = alignment?.Description ?? "";
+                }
+                catch { }
+                try
+                {
+                    alignmentStyle = alignment?.StyleName ?? "Default";
+                }
+                catch { }
+
+                // Get first layout profile ID
+                ObjectId layoutProfileId = ObjectId.Null;
+                try
+                {
+                    foreach (ObjectId profileId in alignment.GetProfileIds())
+                    {
+                        using (Profile profile = profileId.GetObject(OpenMode.ForRead) as Profile)
+                        {
+                            if (profile != null && profile.Entities != null && profile.Entities.Count > 0)
+                            {
+                                layoutProfileId = profileId;
+                                break;
+                            }
+                        }
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    AcApp.Application.DocumentManager.MdiActiveDocument.Editor.WriteMessage($"\nError getting profile IDs: {ex.Message}");
+                    return;
+                }
+
+                if (layoutProfileId == ObjectId.Null)
+                {
+                    AcApp.Application.DocumentManager.MdiActiveDocument.Editor.WriteMessage("\nNo layout profile found.");
+                    return;
+                }
+
+                // Open the profile and generate report
+                using (Profile layoutProfile = layoutProfileId.GetObject(OpenMode.ForRead) as Profile)
+                {
+                    if (layoutProfile == null)
+                    {
+                        AcApp.Application.DocumentManager.MdiActiveDocument.Editor.WriteMessage("\nError accessing profile.");
+                        return;
+                    }
+
+                    // Get profile properties safely
+                    string profileName = "";
+                    string profileDescription = "";
+                    string profileStyle = "Default";
+                    try
+                    {
+                        profileName = layoutProfile.Name ?? "";
+                    }
+                    catch { }
+                    try
+                    {
+                        profileDescription = layoutProfile.Description ?? "";
+                    }
+                    catch { }
+                    try
+                    {
+                        profileStyle = layoutProfile.StyleName ?? "Default";
+                    }
+                    catch { }
+
+                    // Create PDF document using iText7
+                    PdfWriter writer = new PdfWriter(outputPath);
+                    PdfDocument pdf = new PdfDocument(writer);
+                    Document document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
+                    document.SetMargins(50, 50, 50, 50);
+
+                    // Define fonts
+                    PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+                    PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+
+                    // Write header
+                    document.Add(new Paragraph($"Project Name: {projectName}").SetFont(boldFont).SetFontSize(11));
+                    document.Add(new Paragraph(" Description:").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($"Horizontal Alignment Name: {alignmentName}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($" Description: {alignmentDescription}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($" Style: {alignmentStyle}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($"Vertical Alignment Name: {profileName}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($" Description: {profileDescription}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph($" Style: {profileStyle}").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph("\n"));
+
+                    // Add column headers
+                    iText.Layout.Element.Table headerTable = new iText.Layout.Element.Table(2);
+                    headerTable.SetWidth(UnitValue.CreatePercentValue(100));
+
+                    iText.Layout.Element.Cell cell1 = new iText.Layout.Element.Cell().Add(new Paragraph("STATION").SetFont(boldFont).SetFontSize(10))
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+                    headerTable.AddCell(cell1);
+
+                    iText.Layout.Element.Cell cell2 = new iText.Layout.Element.Cell().Add(new Paragraph("ELEVATION").SetFont(boldFont).SetFontSize(10))
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+                    headerTable.AddCell(cell2);
+
+                    document.Add(headerTable);
+                    document.Add(new Paragraph("\n"));
+
+                    // Process profile entities
+                    if (layoutProfile.Entities != null)
+                    {
+                        for (int i = 0; i < layoutProfile.Entities.Count; i++)
+                        {
+                            try
+                            {
+                                ProfileEntity entity = layoutProfile.Entities[i];
+                                if (entity == null) continue;
+
+                                switch (entity.EntityType)
+                                {
+                                    case ProfileEntityType.Tangent:
+                                        if (entity is ProfileTangent tangent)
+                                            WriteProfileTangentPdf(document, tangent, i, layoutProfile.Entities.Count, normalFont, boldFont);
+                                        else
+                                            WriteUnsupportedProfileEntityPdf(document, entity, normalFont);
+                                        break;
+                                    case ProfileEntityType.Circular:
+                                        if (entity is ProfileCircular circular)
+                                            WriteProfileParabolaPdf(document, circular, normalFont, boldFont);
+                                        else
+                                            WriteUnsupportedProfileEntityPdf(document, entity, normalFont);
+                                        break;
+                                    default:
+                                        WriteUnsupportedProfileEntityPdf(document, entity, normalFont);
+                                        break;
+                                }
+                            }
+                            catch (System.Exception ex)
+                            {
+                                document.Add(new Paragraph($"Error processing entity {i}: {ex.Message}").SetFont(normalFont).SetFontSize(10));
+                                document.Add(new Paragraph("\n"));
+                            }
+                        }
+                    }
+
+                    document.Close();
+                }
+            }
+            catch (System.Exception ex)
+            {
+                throw new System.Exception($"Error in GenerateVerticalReportPdf: {ex.Message}", ex);
+            }
+        }
+
+        private void WriteProfileTangentPdf(Document document, ProfileTangent tangent, int index, int totalCount, PdfFont normalFont, PdfFont labelFont)
+        {
+            try
+            {
+                if (tangent == null)
+                {
+                    document.Add(new Paragraph("Element: Linear").SetFont(labelFont).SetFontSize(10));
+                    document.Add(new Paragraph("Unable to read tangent data for this profile element.").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph("\n"));
+                    return;
+                }
+
+                document.Add(new Paragraph("Element: Linear").SetFont(labelFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+
+                // Get properties safely
+                double startStation = 0;
+                double startElevation = 0;
+                double endStation = 0;
+                double endElevation = 0;
+                double grade = 0;
+                double length = 0;
+
+                try { startStation = tangent.StartStation; } catch { }
+                try { startElevation = tangent.StartElevation; } catch { }
+                try { endStation = tangent.EndStation; } catch { }
+                try { endElevation = tangent.EndElevation; } catch { }
+                try { grade = tangent.Grade; } catch { }
+                try { length = tangent.Length; } catch { }
+
+                // Determine point labels
+                if (index == 0)
+                    document.Add(new Paragraph($" POB {FormatStation(startStation),15} {startElevation,15:F2}").SetFont(normalFont).SetFontSize(10));
+
+                document.Add(new Paragraph($" PVI {FormatStation(endStation),15} {endElevation,15:F2}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Tangent Grade: {grade * 100,15:F3}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Tangent Length: {length,15:F2}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+            catch (System.Exception ex)
+            {
+                document.Add(new Paragraph("Element: Linear").SetFont(labelFont).SetFontSize(10));
+                document.Add(new Paragraph($"Error writing tangent data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+        }
+
+        private void WriteProfileParabolaPdf(Document document, ProfileCircular curve, PdfFont normalFont, PdfFont labelFont)
+        {
+            try
+            {
+                if (curve == null)
+                {
+                    document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10));
+                    document.Add(new Paragraph("Unable to read curve data for this profile element.").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph("\n"));
+                    return;
+                }
+
+                const double tolerance = 1e-8;
+
+                // Get properties safely
+                double gradeIn = 0;
+                double gradeOut = 0;
+                double length = 0;
+                double startStation = 0;
+                double endStation = 0;
+                double pviStation = 0;
+                double pviElevation = 0;
+                double startElevation = 0;
+                double endElevation = 0;
+
+                try { gradeIn = curve.GradeIn; } catch { }
+                try { gradeOut = curve.GradeOut; } catch { }
+                try { length = curve.Length; } catch { }
+                try { startStation = curve.StartStation; } catch { }
+                try { endStation = curve.EndStation; } catch { }
+                try { pviStation = curve.PVIStation; } catch { }
+                try { pviElevation = curve.PVIElevation; } catch { }
+
+                // Try to get elevations, but calculate if not available
+                try { startElevation = curve.StartElevation; } catch
+                {
+                    startElevation = 0;
+                }
+                try { endElevation = curve.EndElevation; } catch
+                {
+                    endElevation = 0;
+                }
+
+                gradeIn *= 100;
+                gradeOut *= 100;
+                double gradeDiff = gradeOut - gradeIn;
+                double r = Math.Abs(length) > tolerance ? gradeDiff / length : 0;
+                double k = Math.Abs(gradeDiff) > tolerance ? length / gradeDiff : double.PositiveInfinity;
+                double middleOrdinate = Math.Abs(r * length * length / 800);
+
+                // Calculate PVC and PVT elevations from PVI
+                double gradeInDecimal = gradeIn / 100.0;
+                double gradeOutDecimal = gradeOut / 100.0;
+                double pvcElevation = pviElevation - (gradeInDecimal * (length / 2));
+                double pvtElevation = endElevation;
+                if (Math.Abs(pvtElevation) < tolerance && Math.Abs(pviElevation) > tolerance)
+                {
+                    pvtElevation = pviElevation + (gradeOutDecimal * (length / 2));
+                }
+
+                document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10));
+                document.Add(new Paragraph($" PVC {FormatStation(startStation),15} {pvcElevation,15:F2}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" PVI {FormatStation(pviStation),15} {pviElevation,15:F2}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" PVT {FormatStation(endStation),15} {pvtElevation,15:F2}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Length: {length,15:F2}").SetFont(normalFont).SetFontSize(10));
+
+                double gradeChange = Math.Abs(gradeDiff);
+                if (gradeChange > 1.0)
+                    document.Add(new Paragraph($" Stopping Sight Distance: {571.52,15:F2}").SetFont(normalFont).SetFontSize(10));
+                else
+                    document.Add(new Paragraph($" Headlight Sight Distance: {540.41,15:F2}").SetFont(normalFont).SetFontSize(10));
+
+                document.Add(new Paragraph($" Entrance Grade: {gradeIn,15:F3}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Exit Grade: {gradeOut,15:F3}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" r = ( g2 - g1 ) / L: {r,15:F3}").SetFont(normalFont).SetFontSize(10));
+                string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F3") : "INF";
+                document.Add(new Paragraph($" K = l / ( g2 - g1 ): {kDisplay,15}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph($" Middle Ordinate: {middleOrdinate,15:F2}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+            catch (System.Exception ex)
+            {
+                document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10));
+                document.Add(new Paragraph($"Error writing curve data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+        }
+
+        private void WriteUnsupportedProfileEntityPdf(Document document, ProfileEntity entity, PdfFont normalFont)
+        {
+            document.Add(new Paragraph($"Element: {entity?.EntityType.ToString() ?? "Unknown"}").SetFont(normalFont).SetFontSize(10));
+            document.Add(new Paragraph("Unsupported profile entity type encountered.").SetFont(normalFont).SetFontSize(10));
+            document.Add(new Paragraph("\n"));
+        }
+
     }
 
     /// <summary>
@@ -872,7 +1819,7 @@ namespace GeoTableReports
             txtOutputPath = new TextBox { Location = new System.Drawing.Point(20, 120), Width = 350 };
             txtOutputPath.Text = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "alignment_report.pdf"
+                "alignment_report.txt"
             );
             this.Controls.Add(txtOutputPath);
 
@@ -895,7 +1842,7 @@ namespace GeoTableReports
         {
             using (SaveFileDialog dialog = new SaveFileDialog())
             {
-                dialog.Filter = "PDF Files (*.pdf)|*.pdf|Text Files (*.txt)|*.txt|All Files (*.*)|*.*";
+                dialog.Filter = "PDF Files (*.pdf)|*.pdf|Text Files (*.txt)|*.txt|XML Files (*.xml)|*.xml|All Files (*.*)|*.*";
                 dialog.FilterIndex = 1;
                 dialog.FileName = "alignment_report.pdf";
 
