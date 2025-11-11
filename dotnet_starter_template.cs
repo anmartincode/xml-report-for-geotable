@@ -574,15 +574,15 @@ namespace GeoTableReports
             dataTable.SetWidth(UnitValue.CreatePercentValue(100));
 
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{label}{station}").SetFont(font).SetFontSize(9))
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
 
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{northing:F4}").SetFont(font).SetFontSize(9))
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
 
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{easting:F4}").SetFont(font).SetFontSize(9))
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
 
             document.Add(dataTable);
@@ -597,11 +597,11 @@ namespace GeoTableReports
             dataTable.SetWidth(UnitValue.CreatePercentValue(100));
 
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{label}{station}").SetFont(font).SetFontSize(9))
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
 
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{elevation:F2}").SetFont(font).SetFontSize(9))
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
 
             document.Add(dataTable);
@@ -1259,19 +1259,19 @@ namespace GeoTableReports
 
                 iText.Layout.Element.Cell cell1 = new iText.Layout.Element.Cell().Add(new Paragraph("STATION")
                     .SetFont(boldFont).SetFontSize(10))
-                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                     .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
                 headerTable.AddCell(cell1);
 
                 iText.Layout.Element.Cell cell2 = new iText.Layout.Element.Cell().Add(new Paragraph("NORTHING")
                     .SetFont(boldFont).SetFontSize(10))
-                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                     .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
                 headerTable.AddCell(cell2);
 
                 iText.Layout.Element.Cell cell3 = new iText.Layout.Element.Cell().Add(new Paragraph("EASTING")
                     .SetFont(boldFont).SetFontSize(10))
-                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                     .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
                 headerTable.AddCell(cell3);
 
@@ -1627,12 +1627,12 @@ namespace GeoTableReports
                     headerTable.SetWidth(UnitValue.CreatePercentValue(100));
 
                     iText.Layout.Element.Cell cell1 = new iText.Layout.Element.Cell().Add(new Paragraph("STATION").SetFont(boldFont).SetFontSize(10))
-                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                         .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
                     headerTable.AddCell(cell1);
 
                     iText.Layout.Element.Cell cell2 = new iText.Layout.Element.Cell().Add(new Paragraph("ELEVATION").SetFont(boldFont).SetFontSize(10))
-                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                         .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
                     headerTable.AddCell(cell2);
 
