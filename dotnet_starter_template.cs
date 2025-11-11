@@ -575,6 +575,7 @@ namespace GeoTableReports
             // [ LABEL | STATION | NORTHING | EASTING ]
             iText.Layout.Element.Table dataTable = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(new float[] { 35f, 25f, 20f, 20f }));
             dataTable.SetWidth(UnitValue.CreatePercentValue(100));
+            dataTable.SetMarginLeft(10);
 
             // LABEL (left-aligned)
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(label).SetFont(font).SetFontSize(9))
@@ -1269,6 +1270,7 @@ namespace GeoTableReports
                 // Add column headers with subtle divider (left border) before numeric columns
                 iText.Layout.Element.Table headerTable = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(new float[] { 35f, 25f, 20f, 20f }));
                 headerTable.SetWidth(UnitValue.CreatePercentValue(100));
+                headerTable.SetMarginLeft(10);
 
                 // LABEL header placeholder (blank, aligns with labels like POT/PI)
                 iText.Layout.Element.Cell labelHeader = new iText.Layout.Element.Cell().Add(new Paragraph(" ")
