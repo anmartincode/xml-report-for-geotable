@@ -1,3 +1,17 @@
 /home/amartinez/.local/local/xml-report-for-geotable/obj/Debug/GeoTableReports.csproj.AssemblyReference.cache
 /home/amartinez/.local/local/xml-report-for-geotable/obj/Debug/GeoTableReports.GeneratedMSBuildEditorConfig.editorconfig
 /home/amartinez/.local/local/xml-report-for-geotable/obj/Debug/GeoTableReports.csproj.CoreCompileInputs.cache
+C:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\GeoTableReports.csproj.AssemblyReference.cache
+C:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\GeoTableReports.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\GeoTableReports.csproj.CoreCompileInputs.cache
+C:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\GeoTableReports.sourcelink.json
+c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\GeoTableReports.csproj.SuggestedBindingRedirects.cache
+c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\GeoTableReports.dll.config
+c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\bin\Debug\GeoTableReports.dll.config
+c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\bin\Debug\GeoTableReports.deps.json
+c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\bin\Debug\GeoTableReports.dll
+c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\bin\Debug\GeoTableReports.pdb
+c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\GeoTableReports.dll
+c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\refint\GeoTableReports.dll
+c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\GeoTableReports.pdb
+c:\Users\anmartinez\.vscode\local\xml-report-for-geotable\obj\Debug\ref\GeoTableReports.dll

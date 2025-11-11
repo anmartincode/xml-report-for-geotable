@@ -1,30 +1,30 @@
 {
   "format": 1,
   "restore": {
-    "/home/amartinez/.local/local/xml-report-for-geotable/GeoTableReports.csproj": {}
+    "C:\\Users\\anmartinez\\.vscode\\local\\xml-report-for-geotable\\GeoTableReports.csproj": {}
   },
   "projects": {
-    "/home/amartinez/.local/local/xml-report-for-geotable/GeoTableReports.csproj": {
+    "C:\\Users\\anmartinez\\.vscode\\local\\xml-report-for-geotable\\GeoTableReports.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/home/amartinez/.local/local/xml-report-for-geotable/GeoTableReports.csproj",
+        "projectUniqueName": "C:\\Users\\anmartinez\\.vscode\\local\\xml-report-for-geotable\\GeoTableReports.csproj",
         "projectName": "GeoTableReports",
-        "projectPath": "/home/amartinez/.local/local/xml-report-for-geotable/GeoTableReports.csproj",
-        "packagesPath": "/home/amartinez/.nuget/packages/",
-        "outputPath": "/home/amartinez/.local/local/xml-report-for-geotable/obj/",
+        "projectPath": "C:\\Users\\anmartinez\\.vscode\\local\\xml-report-for-geotable\\GeoTableReports.csproj",
+        "packagesPath": "C:\\Users\\anmartinez\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\anmartinez\\.vscode\\local\\xml-report-for-geotable\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "/home/amartinez/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\anmartinez\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
-          "net48"
+          "net8.0-windows"
         ],
         "sources": {
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
-          "net48": {
-            "targetAlias": "net48",
+          "net8.0-windows7.0": {
+            "targetAlias": "net8.0-windows",
             "projectReferences": {}
           }
         },
@@ -37,24 +37,56 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        }
+        },
+        "SdkAnalysisLevel": "9.0.300"
       },
       "frameworks": {
-        "net48": {
-          "targetAlias": "net48",
+        "net8.0-windows7.0": {
+          "targetAlias": "net8.0-windows",
           "dependencies": {
-            "Microsoft.NETFramework.ReferenceAssemblies": {
-              "suppressParent": "All",
+            "NETStandard.Library": {
               "target": "Package",
-              "version": "[1.0.3, )",
-              "autoReferenced": true
+              "version": "[2.0.3, )"
             },
             "iTextSharp.LGPLv2.Core": {
               "target": "Package",
               "version": "[3.4.4, )"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/8.0.416/RuntimeIdentifierGraph.json"
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[8.0.21, 8.0.21]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[8.0.21, 8.0.21]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[8.0.21, 8.0.21]"
+            }
+          ],
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            },
+            "Microsoft.WindowsDesktop.App.WindowsForms": {
+              "privateAssets": "none"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.306/PortableRuntimeIdentifierGraph.json"
         }
       }
     }
