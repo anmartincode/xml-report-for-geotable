@@ -17,6 +17,7 @@ using CivApp = Autodesk.Civil.ApplicationServices;
 using Autodesk.Civil.DatabaseServices;
 using CivDb = Autodesk.Civil.DatabaseServices;
 using iText.Kernel.Pdf;
+using iText.Kernel.Geom;
 using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
