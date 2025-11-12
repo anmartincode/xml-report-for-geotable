@@ -1,84 +1,153 @@
-# Civil 3D Geotable XML Report Generator
+# Civil 3D GeoTable Reports - .NET Add-in
 # .gitignore file
 
 # =============================================================================
-# Output Files
+# .NET / C# Build Output
 # =============================================================================
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+\bin\
+
+# Build outputs
+*.dll
+*.exe
+*.pdb
+*.cache
+*.ilk
+*.exp
+*.lib
+*.obj
+
+# Visual Studio cache/options directory
+.vs/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Files built by Visual Studio
+*.pidb
+*.svclog
+*.scc
+
+# Chutzpah Test files
+_Chutzpah*
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+
+# NuGet Symbol Packages
+*.snupkg
+
+# DotNet Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# StyleCop
+StyleCopReport.xml
+
+# Files built by Visual Studio
+*_i.c
+*_p.c
+*_h.h
+*.meta
+*.iobj
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp_proj
+*_wpftmp.csproj
+*.vspscc
+*.vssscc
+.builds
+*.dotCover
+
+# Test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# Dependency directories
+**/obj/
+**/bin/
+
+# .NET Core
+*.deps.json
+*.runtimeconfig.json
+*.runtimeconfig.dev.json
+*.dll.config
+
+# =============================================================================
+# Generated Report Output Files
+# =============================================================================
+# Generated reports (exclude from repo - these are outputs)
 output/
+reports/
+generated/
+*.pdf
 *.xml
-!sample_output.xml  # Keep the sample
-*.dwg.bak
-*.dwl
-*.dwl2
-
-# =============================================================================
-# Python
-# =============================================================================
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Virtual environments
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
+*.txt
+# Exception: Include sample/template files if in specific directories
+!**/samples/**/*.pdf
+!**/samples/**/*.xml
+!**/samples/**/*.txt
+!sample_output.xml
+!README*.txt
+!LICENSE*.txt
 
 # =============================================================================
 # IDEs and Editors
 # =============================================================================
 # Visual Studio Code
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 *.code-workspace
 
-# PyCharm
+# Visual Studio
+.vs/
+*.sln.iml
+
+# JetBrains Rider
 .idea/
 *.iml
 *.iws
+.idea_modules/
+
+# PyCharm (if any Python scripts)
+*.iml
 
 # Sublime Text
 *.sublime-project
@@ -90,33 +159,32 @@ venv.bak/
 *~
 
 # Emacs
-*~
 \#*\#
 .\#*
 
 # =============================================================================
-# Civil 3D / AutoCAD
+# Civil 3D / AutoCAD Files
 # =============================================================================
 # Drawing backup files
 *.bak
 *.dwl
 *.dwl2
 *.sv$
+*.dwg.bak
 
 # Plot files
 *.plt
-*.log
 
 # AutoCAD temporary files
 *.ac$
 *.dwk
-
-# Civil 3D data
-*.tmp
 *.$ac
 
+# Civil 3D data shortcut files
+_Shortcuts.xml
+
 # =============================================================================
-# Dynamo
+# Dynamo (if applicable)
 # =============================================================================
 # Dynamo backup files
 *.dyn.backup
@@ -126,29 +194,43 @@ venv.bak/
 temp/
 *.tmp.dyn
 
-# Package manager
-packages/
-extra/
+# =============================================================================
+# AutoCAD/Civil 3D Plugin Deployment (Optional)
+# =============================================================================
+# Exclude the deployed bundle folder (already deployed to AppData)
+*.bundle/
+# If you want to track bundle structure, only exclude Contents folder:
+# *.bundle/Contents/
 
 # =============================================================================
-# Operating System
+# Operating System Files
 # =============================================================================
 # Windows
 Thumbs.db
+Thumbs.db:encryptable
 ehthumbs.db
+ehthumbs_vista.db
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
 
-# macOS (if using Mac for documentation/development)
+# macOS
 .DS_Store
 .AppleDouble
 .LSOverride
 ._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
 
 # Linux
 .directory
 .Trash-*
+.nfs*
 
 # =============================================================================
 # Project Specific
@@ -157,29 +239,36 @@ $RECYCLE.BIN/
 test_output/
 temp_reports/
 *.test.xml
+*.test.pdf
+*.test.txt
 
-# Large test drawings
+# Large test drawings (exclude large files)
 test_drawings/*.dwg
-!test_drawings/sample_small.dwg  # Keep small sample
+!test_drawings/sample_small.dwg  # Keep small sample if exists
 
 # Configuration overrides (local only)
 config.local.json
 config.user.json
+appsettings.local.json
 
 # Personal notes
 NOTES.txt
 TODO.local.md
+scratch.txt
 
 # Backup copies
 backup/
+backups/
 *.backup
+*.old
 
 # Development scratch files
 scratch/
 dev_test/
+experiments/
 
 # =============================================================================
-# Documentation Build
+# Documentation Build Artifacts
 # =============================================================================
 # Sphinx documentation
 docs/_build/
@@ -189,14 +278,20 @@ docs/_templates/
 # MkDocs
 site/
 
+# DocFX
+_site/
+
 # =============================================================================
 # Archives and Compressed Files
 # =============================================================================
 *.zip
+*.tar
 *.tar.gz
 *.rar
 *.7z
-!release/*.zip  # Keep release archives if present
+*.gz
+*.bz2
+!release/*.zip  # Keep release archives if in release folder
 
 # =============================================================================
 # Logs and Databases
@@ -204,54 +299,272 @@ site/
 *.log
 *.sql
 *.sqlite
+*.sqlite3
 *.db
 
 # =============================================================================
-# Credentials and Secrets (Important!)
+# Credentials and Secrets (IMPORTANT!)
 # =============================================================================
 *.key
 *.pem
+*.pfx
+*.p12
 credentials.json
 secrets.json
 .env
 .env.local
+.env.*.local
+appsettings.secrets.json
 
 # =============================================================================
-# CI/CD
+# Temporary Files
 # =============================================================================
-.github/workflows/
-.gitlab-ci.yml
-azure-pipelines.yml
+*.tmp
+*.temp
+~$*
+
+# Microsoft Office temporary files
+~$*.doc*
+~$*.xls*
+~$*.ppt*
+
+# =============================================================================
+# Package Managers
+# =============================================================================
+# Node modules (if using any Node.js tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Bower
+bower_components/
 
 # =============================================================================
 # Miscellaneous
 # =============================================================================
-# Temporary files
-*.tmp
-*.temp
+# Windows Installer files
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
 
-# Node modules (if using any Node.js tools)
-node_modules/
+# Windows shortcuts
+*.lnk
 
-# Package files
-*.nupkg
+# JetBrains IDEs
+*.sln.DotSettings.user
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# TeamCity
+_TeamCity*
+
+# DotCover
+*.dotCover
+
+# AxoCover
+.axoCover/*
+!.axoCover/settings.json
+
+# Coverlet
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# Visual Studio Profiler
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+# Visual Studio Trace Files
+*.e2e
+
+# TFS 2012 Local Workspace
+$tf/
+
+# Guidance Automation Toolkit
+*.gpState
+
+# ReSharper is a .NET coding add-in
+_ReSharper*/
+
+# NCrunch
+_NCrunch_*
+.*crunch*.local.xml
+nCrunchTemp_*
+
+# MightyMoose
+*.mm.*
+AutoTest.Net/
+
+# Web workbench (sass)
+.sass-cache/
+
+# Installshield output folder
+[Ee]xpress/
+
+# DocProject is a documentation generator add-in
+DocProject/buildhelp/
+DocProject/Help/*.HxT
+DocProject/Help/*.HxC
+DocProject/Help/*.hhc
+DocProject/Help/*.hhk
+DocProject/Help/*.hhp
+DocProject/Help/Html2
+DocProject/Help/html
+
+# Click-Once directory
+publish/
+
+# Publish Web Output
+*.[Pp]ublish.xml
+*.azurePubxml
+
+# Microsoft Azure Web App publish settings.
+*.publishsettings
+
+# Others
+sql/
+*.Cache
+ClientBin/
+[Ss]tyle[Cc]op.*
+![Ss]tyle[Cc]op.targets
+~$*
+*.dbmdl
+*.dbproj.schemaview
+*.jfm
+*.publishproj
+*.rdl.data
+*.bim.layout
+*.bim_*.settings
+*.rptproj.rsuser
+*- [Bb]ackup.rdl
+*- [Bb]ackup ([0-9]).rdl
+*- [Bb]ackup ([0-9][0-9]).rdl
+
+# Microsoft Fakes
+FakesAssemblies/
+
+# GhostDoc plugin setting file
+*.GhostDoc.xml
+
+# Node.js Tools for Visual Studio
+.ntvs_analysis.dat
+
+# Visual Studio 6 build log
+*.plg
+
+# Visual Studio 6 workspace options file
+*.opt
+
+# Visual Studio 6 auto-generated workspace file (contains which files were open etc.)
+*.vbw
+
+# Visual Studio 6 auto-generated project file (contains which files were open etc.)
+*.vbp
+
+# Visual Studio 6 workspace and project file (working project files containing files to include in project)
+*.dsw
+*.dsp
+
+# Visual Studio 6 technical files
+*.ncb
+*.aps
+
+# Visual Studio LightSwitch build output
+**/*.HTMLClient/GeneratedArtifacts
+**/*.DesktopClient/GeneratedArtifacts
+**/*.DesktopClient/ModelManifest.xml
+**/*.Server/GeneratedArtifacts
+**/*.Server/ModelManifest.xml
+_Pvt_Extensions
+
+# Paket dependency manager
+.paket/paket.exe
+paket-files/
+
+# FAKE - F# Make
+.fake/
+
+# CodeRush personal settings
+.cr/personal
+
+# Python Tools for Visual Studio (PTVS)
+__pycache__/
+*.pyc
+
+# Cake - Uncomment if you are using it
+# tools/**
+# !tools/packages.config
+
+# Tabs Studio
+*.tss
+
+# Telerik's JustMock configuration file
+*.jmconfig
+
+# BizTalk build output
+*.btp.cs
+*.btm.cs
+*.odx.cs
+*.xsd.cs
+
+# OpenCover UI analysis results
+OpenCover/
+
+# Azure Stream Analytics local run output
+ASALocalRun/
+
+# MSBuild Binary and Structured Log
+*.binlog
+
+# NVidia Nsight GPU debugger configuration file
+*.nvuser
+
+# MFractors (Xamarin productivity tool) working folder
+.mfractor/
+
+# Local History for Visual Studio
+.localhistory/
+
+# Visual Studio History (VSHistory) files
+.vshistory/
+
+# BeatPulse healthcheck temp database
+healthchecksdb
+
+# Backup folder for Package Reference Convert tool in Visual Studio 2017
+MigrationBackup/
+
+# Ionide (cross platform F# VS Code tools) working folder
+.ionide/
+
+# Fody - auto-generated XML schema
+FodyWeavers.xsd
+
+# VS Code files for those working on multiple tools
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Windows Installer files from build outputs
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
 
 # JetBrains Rider
-.idea/
 *.sln.iml
-
-# User-specific files
-*.rsuser
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-
-
-
-
-
-
-
-
-

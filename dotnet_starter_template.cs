@@ -12,6 +12,7 @@ using Autodesk.AutoCAD.Runtime;
 using AcApp = Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
+using Autodesk.AutoCAD.Windows;
 using Autodesk.Civil.ApplicationServices;
 using CivApp = Autodesk.Civil.ApplicationServices;
 using Autodesk.Civil.DatabaseServices;
@@ -32,20 +33,57 @@ namespace GeoTableReports
 {
     public class ReportCommands : IExtensionApplication
     {
+        private static PaletteSet paletteSet;
+        private static ReportPanelControl reportPanel;
+
         // Called when Civil 3D starts up
         public void Initialize()
         {
             AcApp.Document doc = AcApp.Application.DocumentManager.MdiActiveDocument;
             if (doc != null)
             {
-                doc.Editor.WriteMessage("\nGeoTable Reports loaded. Type GEOTABLE to generate reports.");
+                doc.Editor.WriteMessage("\nGeoTable Reports loaded. Type GEOTABLE_PANEL to open the panel or GEOTABLE for quick generation.");
             }
         }
 
         // Called when Civil 3D shuts down
         public void Terminate()
         {
-            // Cleanup code here
+            // Cleanup palette
+            if (paletteSet != null)
+            {
+                paletteSet.Close();
+                paletteSet = null;
+            }
+        }
+
+        /// <summary>
+        /// Command to show the GeoTable Reports panel
+        /// </summary>
+        [CommandMethod("GEOTABLE_PANEL")]
+        public void ShowReportPanel()
+        {
+            if (paletteSet == null)
+            {
+                // Create the palette set
+                paletteSet = new PaletteSet("GeoTable Reports", new System.Guid("A1B2C3D4-E5F6-4A5B-9C8D-1E2F3A4B5C6D"));
+
+                // Create the user control
+                reportPanel = new ReportPanelControl();
+
+                // Add the control to the palette
+                paletteSet.Add("Report Generator", reportPanel);
+
+                // Set palette properties
+                paletteSet.MinimumSize = new System.Drawing.Size(350, 500);
+                paletteSet.DockEnabled = (DockSides.Left | DockSides.Right);
+                paletteSet.Style = PaletteSetStyles.ShowCloseButton |
+                                   PaletteSetStyles.ShowAutoHideButton |
+                                   PaletteSetStyles.Snappable;
+            }
+
+            // Show the palette
+            paletteSet.Visible = true;
         }
 
         /// <summary>
@@ -65,7 +103,10 @@ namespace GeoTableReports
                     if (dialog.ShowDialog() == DialogResult.OK)
                     {
                         string reportType = dialog.ReportType; // "Vertical" or "Horizontal"
-                        string outputPath = dialog.OutputPath;
+                        string baseOutputPath = dialog.OutputPath;
+                        bool generatePDF = dialog.GeneratePDF;
+                        bool generateTXT = dialog.GenerateTXT;
+                        bool generateXML = dialog.GenerateXML;
 
                         // Prompt user to select alignment
                         ObjectId alignmentId = SelectAlignment(ed);
@@ -103,41 +144,71 @@ namespace GeoTableReports
 
                             try
                             {
-                                // Detect format from file extension
-                                string extension = System.IO.Path.GetExtension(outputPath).ToLower();
-                                bool isXml = extension == ".xml";
-                                bool isPdf = extension == ".pdf";
+                                var generatedFiles = new System.Collections.Generic.List<string>();
 
-                                if (reportType == "Vertical")
+                                // Generate PDF if requested
+                                if (generatePDF)
                                 {
-                                    if (isXml)
-                                        GenerateVerticalReportXml(alignment, outputPath);
-                                    else if (isPdf)
-                                        GenerateVerticalReportPdf(alignment, outputPath);
+                                    string pdfPath = baseOutputPath + ".pdf";
+                                    ed.WriteMessage($"\nGenerating PDF: {pdfPath}");
+
+                                    if (reportType == "Vertical")
+                                        GenerateVerticalReportPdf(alignment, pdfPath);
                                     else
-                                        GenerateVerticalReport(alignment, outputPath);
+                                        GenerateHorizontalReportPdf(alignment, pdfPath);
+
+                                    generatedFiles.Add(pdfPath);
+                                    ed.WriteMessage($"\n✓ PDF saved successfully");
                                 }
-                                else
+
+                                // Generate TXT if requested
+                                if (generateTXT)
                                 {
-                                    if (isXml)
-                                        GenerateHorizontalReportXml(alignment, outputPath);
-                                    else if (isPdf)
-                                        GenerateHorizontalReportPdf(alignment, outputPath);
+                                    string txtPath = baseOutputPath + ".txt";
+                                    ed.WriteMessage($"\nGenerating TXT: {txtPath}");
+
+                                    if (reportType == "Vertical")
+                                        GenerateVerticalReport(alignment, txtPath);
                                     else
-                                        GenerateHorizontalReport(alignment, outputPath);
+                                        GenerateHorizontalReport(alignment, txtPath);
+
+                                    generatedFiles.Add(txtPath);
+                                    ed.WriteMessage($"\n✓ TXT saved successfully");
+                                }
+
+                                // Generate XML if requested
+                                if (generateXML)
+                                {
+                                    string xmlPath = baseOutputPath + ".xml";
+                                    ed.WriteMessage($"\nGenerating XML: {xmlPath}");
+
+                                    if (reportType == "Vertical")
+                                        GenerateVerticalReportXml(alignment, xmlPath);
+                                    else
+                                        GenerateHorizontalReportXml(alignment, xmlPath);
+
+                                    generatedFiles.Add(xmlPath);
+                                    ed.WriteMessage($"\n✓ XML saved successfully");
                                 }
 
                                 tr.Commit();
 
                                 // Show success message
+                                string successMessage = $"Report(s) generated successfully!\n\n{generatedFiles.Count} file(s) created:\n";
+                                foreach (string file in generatedFiles)
+                                {
+                                    successMessage += $"\n• {System.IO.Path.GetFileName(file)}";
+                                }
+                                successMessage += $"\n\nLocation: {System.IO.Path.GetDirectoryName(generatedFiles[0])}";
+
                                 MessageBox.Show(
-                                    $"Report generated successfully!\n\nSaved to: {outputPath}",
+                                    successMessage,
                                     "Success",
                                     MessageBoxButtons.OK,
                                     MessageBoxIcon.Information
                                 );
 
-                                ed.WriteMessage($"\n✓ Report saved to: {outputPath}");
+                                ed.WriteMessage($"\n✓ All reports generated successfully!");
                             }
                             catch (System.Exception reportEx)
                             {
@@ -155,10 +226,10 @@ namespace GeoTableReports
                 {
                     errorMessage += $"\n\nInner Exception: {ex.InnerException.Message}";
                 }
-                
+
                 ed.WriteMessage($"\n✗ Error: {errorMessage}");
                 ed.WriteMessage($"\nStack Trace: {ex.StackTrace}");
-                
+
                 MessageBox.Show(
                     $"Error generating report:\n\n{errorMessage}",
                     "Error",
@@ -205,17 +276,17 @@ namespace GeoTableReports
                                     count++;
                                     ed.WriteMessage($"\nProcessing {count}/{total}: {alignment.Name}");
 
-                                    // Generate reports
+                                    // Generate reports - FIXED: Using PDF generation methods
                                     if (includeVertical)
                                     {
                                         string path = System.IO.Path.Combine(outputFolder, $"{alignment.Name}_Vertical.pdf");
-                                        GenerateVerticalReport(alignment, path);
+                                        GenerateVerticalReportPdf(alignment, path);
                                     }
 
                                     if (includeHorizontal)
                                     {
                                         string path = System.IO.Path.Combine(outputFolder, $"{alignment.Name}_Horizontal.pdf");
-                                        GenerateHorizontalReport(alignment, path);
+                                        GenerateHorizontalReportPdf(alignment, path);
                                     }
                                 }
 
@@ -235,6 +306,12 @@ namespace GeoTableReports
             catch (System.Exception ex)
             {
                 ed.WriteMessage($"\n✗ Error: {ex.Message}");
+                MessageBox.Show(
+                    $"Error during batch processing:\n\n{ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
             }
         }
 
@@ -1859,19 +1936,28 @@ namespace GeoTableReports
     }
 
     /// <summary>
-    /// Simple report selection form
+    /// Enhanced report selection form with multiple format options
     /// </summary>
     public class ReportSelectionForm : Form
     {
         public string ReportType { get; private set; }
         public string OutputPath { get; private set; }
+        public bool GeneratePDF { get; private set; }
+        public bool GenerateTXT { get; private set; }
+        public bool GenerateXML { get; private set; }
 
         private RadioButton rbVertical;
         private RadioButton rbHorizontal;
         private TextBox txtOutputPath;
         private Button btnBrowse;
+        private CheckBox chkPDF;
+        private CheckBox chkTXT;
+        private CheckBox chkXML;
+        private Button btnSelectAll;
         private Button btnOK;
         private Button btnCancel;
+        private GroupBox grpReportType;
+        private GroupBox grpOutputFormat;
 
         public ReportSelectionForm()
         {
@@ -1881,61 +1967,206 @@ namespace GeoTableReports
         private void InitializeComponents()
         {
             this.Text = "Generate GeoTable Report";
-            this.Size = new System.Drawing.Size(500, 200);
+            this.Size = new System.Drawing.Size(550, 380);
             this.StartPosition = FormStartPosition.CenterScreen;
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
 
-            var lblType = new System.Windows.Forms.Label { Text = "Report Type:", Location = new System.Drawing.Point(20, 20), AutoSize = true };
-            this.Controls.Add(lblType);
+            // Report Type Group
+            grpReportType = new GroupBox
+            {
+                Text = "Report Type",
+                Location = new System.Drawing.Point(20, 20),
+                Size = new System.Drawing.Size(490, 80)
+            };
+            this.Controls.Add(grpReportType);
 
-            rbVertical = new RadioButton { Text = "Vertical Alignment", Location = new System.Drawing.Point(40, 45), Checked = true, AutoSize = true };
-            rbHorizontal = new RadioButton { Text = "Horizontal Alignment", Location = new System.Drawing.Point(40, 70), AutoSize = true };
-            this.Controls.Add(rbVertical);
-            this.Controls.Add(rbHorizontal);
+            rbVertical = new RadioButton
+            {
+                Text = "Vertical Alignment",
+                Location = new System.Drawing.Point(20, 25),
+                Checked = true,
+                AutoSize = true
+            };
+            rbHorizontal = new RadioButton
+            {
+                Text = "Horizontal Alignment",
+                Location = new System.Drawing.Point(20, 50),
+                AutoSize = true
+            };
+            grpReportType.Controls.Add(rbVertical);
+            grpReportType.Controls.Add(rbHorizontal);
 
-            var lblOutput = new System.Windows.Forms.Label { Text = "Output Path:", Location = new System.Drawing.Point(20, 100), AutoSize = true };
+            // Output Format Group
+            grpOutputFormat = new GroupBox
+            {
+                Text = "Output Format",
+                Location = new System.Drawing.Point(20, 110),
+                Size = new System.Drawing.Size(490, 120)
+            };
+            this.Controls.Add(grpOutputFormat);
+
+            chkPDF = new CheckBox
+            {
+                Text = "PDF (Portable Document Format)",
+                Location = new System.Drawing.Point(20, 25),
+                Checked = true,
+                AutoSize = true
+            };
+            chkTXT = new CheckBox
+            {
+                Text = "TXT (Plain Text)",
+                Location = new System.Drawing.Point(20, 50),
+                Checked = false,
+                AutoSize = true
+            };
+            chkXML = new CheckBox
+            {
+                Text = "XML (Extensible Markup Language)",
+                Location = new System.Drawing.Point(20, 75),
+                Checked = false,
+                AutoSize = true
+            };
+            grpOutputFormat.Controls.Add(chkPDF);
+            grpOutputFormat.Controls.Add(chkTXT);
+            grpOutputFormat.Controls.Add(chkXML);
+
+            btnSelectAll = new Button
+            {
+                Text = "Select All Formats",
+                Location = new System.Drawing.Point(350, 10),
+                Width = 140,
+                Height = 30
+            };
+            btnSelectAll.Click += BtnSelectAll_Click;
+            grpOutputFormat.Controls.Add(btnSelectAll);
+
+            // Output Path
+            var lblOutput = new System.Windows.Forms.Label
+            {
+                Text = "Output Location:",
+                Location = new System.Drawing.Point(20, 245),
+                AutoSize = true
+            };
             this.Controls.Add(lblOutput);
 
-            txtOutputPath = new TextBox { Location = new System.Drawing.Point(20, 120), Width = 350 };
+            txtOutputPath = new TextBox
+            {
+                Location = new System.Drawing.Point(20, 270),
+                Width = 390,
+                Height = 25
+            };
             txtOutputPath.Text = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "alignment_report.txt"
+                "alignment_report"
             );
             this.Controls.Add(txtOutputPath);
 
-            btnBrowse = new Button { Text = "Browse...", Location = new System.Drawing.Point(380, 118), Width = 80 };
+            btnBrowse = new Button
+            {
+                Text = "Browse...",
+                Location = new System.Drawing.Point(420, 268),
+                Width = 90,
+                Height = 28
+            };
             btnBrowse.Click += BtnBrowse_Click;
             this.Controls.Add(btnBrowse);
 
-            btnOK = new Button { Text = "OK", Location = new System.Drawing.Point(300, 130), Width = 75, DialogResult = DialogResult.OK };
+            // Action Buttons
+            btnOK = new Button
+            {
+                Text = "Generate",
+                Location = new System.Drawing.Point(320, 300),
+                Width = 85,
+                Height = 30,
+                DialogResult = DialogResult.OK
+            };
             btnOK.Click += BtnOK_Click;
             this.Controls.Add(btnOK);
 
-            btnCancel = new Button { Text = "Cancel", Location = new System.Drawing.Point(385, 130), Width = 75, DialogResult = DialogResult.Cancel };
+            btnCancel = new Button
+            {
+                Text = "Cancel",
+                Location = new System.Drawing.Point(420, 300),
+                Width = 90,
+                Height = 28,
+                DialogResult = DialogResult.Cancel
+            };
             this.Controls.Add(btnCancel);
 
             this.AcceptButton = btnOK;
             this.CancelButton = btnCancel;
+
+            // Add tooltips
+            var toolTip = new ToolTip();
+            toolTip.SetToolTip(chkPDF, "Generate report in PDF format (professional, printable)");
+            toolTip.SetToolTip(chkTXT, "Generate report in plain text format (simple, editable)");
+            toolTip.SetToolTip(chkXML, "Generate report in XML format (structured data, machine-readable)");
+            toolTip.SetToolTip(btnSelectAll, "Select all output formats to generate all three files at once");
+            toolTip.SetToolTip(txtOutputPath, "Base path for output files. Extension will be added based on selected formats.");
+        }
+
+        private void BtnSelectAll_Click(object sender, EventArgs e)
+        {
+            chkPDF.Checked = true;
+            chkTXT.Checked = true;
+            chkXML.Checked = true;
         }
 
         private void BtnBrowse_Click(object sender, EventArgs e)
         {
-            using (SaveFileDialog dialog = new SaveFileDialog())
+            using (System.Windows.Forms.SaveFileDialog dialog = new System.Windows.Forms.SaveFileDialog())
             {
-                dialog.Filter = "PDF Files (*.pdf)|*.pdf|Text Files (*.txt)|*.txt|XML Files (*.xml)|*.xml|All Files (*.*)|*.*";
+                dialog.Filter = "All Formats|*.*|PDF Files (*.pdf)|*.pdf|Text Files (*.txt)|*.txt|XML Files (*.xml)|*.xml";
                 dialog.FilterIndex = 1;
-                dialog.FileName = "alignment_report.pdf";
+                dialog.FileName = "alignment_report";
+                dialog.Title = "Select Output Location";
 
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
-                    txtOutputPath.Text = dialog.FileName;
+                    // Remove extension if provided, we'll add appropriate ones based on selection
+                    txtOutputPath.Text = System.IO.Path.Combine(
+                        System.IO.Path.GetDirectoryName(dialog.FileName),
+                        System.IO.Path.GetFileNameWithoutExtension(dialog.FileName)
+                    );
                 }
             }
         }
 
         private void BtnOK_Click(object sender, EventArgs e)
         {
+            // Validate at least one format is selected
+            if (!chkPDF.Checked && !chkTXT.Checked && !chkXML.Checked)
+            {
+                MessageBox.Show(
+                    "Please select at least one output format.",
+                    "No Format Selected",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                this.DialogResult = DialogResult.None;
+                return;
+            }
+
+            // Validate output path
+            if (string.IsNullOrWhiteSpace(txtOutputPath.Text))
+            {
+                MessageBox.Show(
+                    "Please specify an output location.",
+                    "No Output Location",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                this.DialogResult = DialogResult.None;
+                return;
+            }
+
             ReportType = rbVertical.Checked ? "Vertical" : "Horizontal";
             OutputPath = txtOutputPath.Text;
+            GeneratePDF = chkPDF.Checked;
+            GenerateTXT = chkTXT.Checked;
+            GenerateXML = chkXML.Checked;
         }
     }
 
@@ -2015,6 +2246,501 @@ namespace GeoTableReports
             OutputFolder = txtOutputFolder.Text;
             IncludeVertical = chkVertical.Checked;
             IncludeHorizontal = chkHorizontal.Checked;
+        }
+    }
+
+    /// <summary>
+    /// User control for the report panel
+    /// </summary>
+    public class ReportPanelControl : UserControl
+    {
+        private GroupBox grpReportType;
+        private RadioButton rbVertical;
+        private RadioButton rbHorizontal;
+
+        private GroupBox grpOutputFormat;
+        private CheckBox chkPDF;
+        private CheckBox chkTXT;
+        private CheckBox chkXML;
+        private Button btnSelectAllFormats;
+
+        private GroupBox grpOutputLocation;
+        private TextBox txtOutputPath;
+        private Button btnBrowse;
+
+        private GroupBox grpActions;
+        private Button btnGenerate;
+        private Button btnBatchProcess;
+
+        private System.Windows.Forms.Label lblStatus;
+        private ProgressBar progressBar;
+
+        public ReportPanelControl()
+        {
+            InitializeComponents();
+        }
+
+        private void InitializeComponents()
+        {
+            this.SuspendLayout();
+
+            // Set control properties
+            this.BackColor = System.Drawing.SystemColors.Control;
+            this.AutoScroll = true;
+            this.Padding = new Padding(10);
+
+            int yPos = 10;
+
+            // Report Type Group
+            grpReportType = new GroupBox
+            {
+                Text = "Report Type",
+                Location = new System.Drawing.Point(10, yPos),
+                Width = 320,
+                Height = 80
+            };
+
+            rbVertical = new RadioButton
+            {
+                Text = "Vertical Alignment",
+                Location = new System.Drawing.Point(15, 25),
+                Checked = true,
+                Width = 280
+            };
+
+            rbHorizontal = new RadioButton
+            {
+                Text = "Horizontal Alignment",
+                Location = new System.Drawing.Point(15, 50),
+                Width = 280
+            };
+
+            grpReportType.Controls.Add(rbVertical);
+            grpReportType.Controls.Add(rbHorizontal);
+            this.Controls.Add(grpReportType);
+
+            yPos += 90;
+
+            // Output Format Group
+            grpOutputFormat = new GroupBox
+            {
+                Text = "Output Format",
+                Location = new System.Drawing.Point(10, yPos),
+                Width = 320,
+                Height = 130
+            };
+
+            chkPDF = new CheckBox
+            {
+                Text = "PDF (Portable Document Format)",
+                Location = new System.Drawing.Point(15, 25),
+                Checked = true,
+                Width = 290
+            };
+
+            chkTXT = new CheckBox
+            {
+                Text = "TXT (Plain Text)",
+                Location = new System.Drawing.Point(15, 50),
+                Width = 290
+            };
+
+            chkXML = new CheckBox
+            {
+                Text = "XML (Extensible Markup Language)",
+                Location = new System.Drawing.Point(15, 75),
+                Width = 290
+            };
+
+            btnSelectAllFormats = new Button
+            {
+                Text = "Select All",
+                Location = new System.Drawing.Point(200, 100),
+                Width = 100,
+                Height = 25
+            };
+            btnSelectAllFormats.Click += BtnSelectAllFormats_Click;
+
+            grpOutputFormat.Controls.Add(chkPDF);
+            grpOutputFormat.Controls.Add(chkTXT);
+            grpOutputFormat.Controls.Add(chkXML);
+            grpOutputFormat.Controls.Add(btnSelectAllFormats);
+            this.Controls.Add(grpOutputFormat);
+
+            yPos += 140;
+
+            // Output Location Group
+            grpOutputLocation = new GroupBox
+            {
+                Text = "Output Location",
+                Location = new System.Drawing.Point(10, yPos),
+                Width = 320,
+                Height = 80
+            };
+
+            txtOutputPath = new TextBox
+            {
+                Location = new System.Drawing.Point(15, 25),
+                Width = 290,
+                Text = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                    "alignment_report"
+                )
+            };
+
+            btnBrowse = new Button
+            {
+                Text = "Browse...",
+                Location = new System.Drawing.Point(15, 50),
+                Width = 100,
+                Height = 25
+            };
+            btnBrowse.Click += BtnBrowse_Click;
+
+            grpOutputLocation.Controls.Add(txtOutputPath);
+            grpOutputLocation.Controls.Add(btnBrowse);
+            this.Controls.Add(grpOutputLocation);
+
+            yPos += 90;
+
+            // Actions Group
+            grpActions = new GroupBox
+            {
+                Text = "Actions",
+                Location = new System.Drawing.Point(10, yPos),
+                Width = 320,
+                Height = 90
+            };
+
+            btnGenerate = new Button
+            {
+                Text = "Generate Report",
+                Location = new System.Drawing.Point(15, 25),
+                Width = 290,
+                Height = 30,
+                BackColor = System.Drawing.Color.FromArgb(0, 120, 215),
+                ForeColor = System.Drawing.Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            btnGenerate.Click += BtnGenerate_Click;
+
+            btnBatchProcess = new Button
+            {
+                Text = "Batch Process All Alignments",
+                Location = new System.Drawing.Point(15, 58),
+                Width = 290,
+                Height = 25
+            };
+            btnBatchProcess.Click += BtnBatchProcess_Click;
+
+            grpActions.Controls.Add(btnGenerate);
+            grpActions.Controls.Add(btnBatchProcess);
+            this.Controls.Add(grpActions);
+
+            yPos += 100;
+
+            // Status Label
+            lblStatus = new System.Windows.Forms.Label
+            {
+                Text = "Ready",
+                Location = new System.Drawing.Point(10, yPos),
+                Width = 320,
+                Height = 20,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
+            };
+            this.Controls.Add(lblStatus);
+
+            yPos += 25;
+
+            // Progress Bar
+            progressBar = new ProgressBar
+            {
+                Location = new System.Drawing.Point(10, yPos),
+                Width = 320,
+                Height = 20,
+                Visible = false
+            };
+            this.Controls.Add(progressBar);
+
+            // Set tooltip
+            var toolTip = new ToolTip();
+            toolTip.SetToolTip(chkPDF, "Professional, printable PDF format");
+            toolTip.SetToolTip(chkTXT, "Simple, editable plain text format");
+            toolTip.SetToolTip(chkXML, "Structured data format for processing");
+            toolTip.SetToolTip(btnGenerate, "Select an alignment and generate report(s)");
+            toolTip.SetToolTip(btnBatchProcess, "Process all alignments in the drawing");
+
+            this.ResumeLayout(false);
+        }
+
+        private void BtnSelectAllFormats_Click(object sender, EventArgs e)
+        {
+            chkPDF.Checked = true;
+            chkTXT.Checked = true;
+            chkXML.Checked = true;
+        }
+
+        private void BtnBrowse_Click(object sender, EventArgs e)
+        {
+            using (System.Windows.Forms.SaveFileDialog dialog = new System.Windows.Forms.SaveFileDialog())
+            {
+                dialog.Filter = "All Formats|*.*";
+                dialog.FilterIndex = 1;
+                dialog.FileName = "alignment_report";
+                dialog.Title = "Select Output Location";
+
+                if (dialog.ShowDialog() == DialogResult.OK)
+                {
+                    txtOutputPath.Text = System.IO.Path.Combine(
+                        System.IO.Path.GetDirectoryName(dialog.FileName),
+                        System.IO.Path.GetFileNameWithoutExtension(dialog.FileName)
+                    );
+                }
+            }
+        }
+
+        private void BtnGenerate_Click(object sender, EventArgs e)
+        {
+            // Validate at least one format is selected
+            if (!chkPDF.Checked && !chkTXT.Checked && !chkXML.Checked)
+            {
+                MessageBox.Show(
+                    "Please select at least one output format.",
+                    "No Format Selected",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                return;
+            }
+
+            // Validate output path
+            if (string.IsNullOrWhiteSpace(txtOutputPath.Text))
+            {
+                MessageBox.Show(
+                    "Please specify an output location.",
+                    "No Output Location",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                return;
+            }
+
+            try
+            {
+                lblStatus.Text = "Prompting for alignment selection...";
+                AcApp.Document doc = AcApp.Application.DocumentManager.MdiActiveDocument;
+                Editor ed = doc.Editor;
+
+                // Prompt user to select alignment
+                PromptEntityOptions options = new PromptEntityOptions("\nSelect alignment: ");
+                options.SetRejectMessage("\nMust be an alignment.");
+                options.AddAllowedClass(typeof(Alignment), true);
+                PromptEntityResult result = ed.GetEntity(options);
+
+                if (result.Status != PromptStatus.OK)
+                {
+                    lblStatus.Text = "Cancelled - no alignment selected";
+                    return;
+                }
+
+                ObjectId alignmentId = result.ObjectId;
+                string reportType = rbVertical.Checked ? "Vertical" : "Horizontal";
+                string baseOutputPath = txtOutputPath.Text;
+
+                lblStatus.Text = "Generating report(s)...";
+                progressBar.Visible = true;
+                progressBar.Style = ProgressBarStyle.Marquee;
+
+                // Generate reports
+                using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+                {
+                    Alignment alignment = tr.GetObject(alignmentId, OpenMode.ForRead) as Alignment;
+                    if (alignment == null)
+                    {
+                        lblStatus.Text = "Error: Invalid alignment";
+                        progressBar.Visible = false;
+                        return;
+                    }
+
+                    var generatedFiles = new System.Collections.Generic.List<string>();
+
+                    // Generate PDF if requested
+                    if (chkPDF.Checked)
+                    {
+                        string pdfPath = baseOutputPath + ".pdf";
+                        if (reportType == "Vertical")
+                            GenerateVerticalReportPdf(alignment, pdfPath);
+                        else
+                            GenerateHorizontalReportPdf(alignment, pdfPath);
+                        generatedFiles.Add(pdfPath);
+                    }
+
+                    // Generate TXT if requested
+                    if (chkTXT.Checked)
+                    {
+                        string txtPath = baseOutputPath + ".txt";
+                        if (reportType == "Vertical")
+                            GenerateVerticalReport(alignment, txtPath);
+                        else
+                            GenerateHorizontalReport(alignment, txtPath);
+                        generatedFiles.Add(txtPath);
+                    }
+
+                    // Generate XML if requested
+                    if (chkXML.Checked)
+                    {
+                        string xmlPath = baseOutputPath + ".xml";
+                        if (reportType == "Vertical")
+                            GenerateVerticalReportXml(alignment, xmlPath);
+                        else
+                            GenerateHorizontalReportXml(alignment, xmlPath);
+                        generatedFiles.Add(xmlPath);
+                    }
+
+                    tr.Commit();
+
+                    progressBar.Visible = false;
+                    lblStatus.Text = $"Success! Generated {generatedFiles.Count} file(s)";
+
+                    string successMessage = $"Report(s) generated successfully!\n\n{generatedFiles.Count} file(s) created:\n";
+                    foreach (string file in generatedFiles)
+                    {
+                        successMessage += $"\n• {System.IO.Path.GetFileName(file)}";
+                    }
+                    successMessage += $"\n\nLocation: {System.IO.Path.GetDirectoryName(generatedFiles[0])}";
+
+                    MessageBox.Show(successMessage, "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                progressBar.Visible = false;
+                lblStatus.Text = "Error occurred";
+                MessageBox.Show($"Error generating report:\n\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void BtnBatchProcess_Click(object sender, EventArgs e)
+        {
+            using (var dialog = new BatchProcessForm())
+            {
+                if (dialog.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        lblStatus.Text = "Processing batch...";
+                        progressBar.Visible = true;
+                        progressBar.Style = ProgressBarStyle.Marquee;
+
+                        AcApp.Document doc = AcApp.Application.DocumentManager.MdiActiveDocument;
+                        Editor ed = doc.Editor;
+
+                        string outputFolder = dialog.OutputFolder;
+                        bool includeVertical = dialog.IncludeVertical;
+                        bool includeHorizontal = dialog.IncludeHorizontal;
+
+                        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+                        {
+                            CivilDocument civilDoc = CivilApplication.ActiveDocument;
+
+                            using (ObjectIdCollection alignmentIds = civilDoc.GetAlignmentIds())
+                            {
+                                int count = 0;
+                                int total = alignmentIds.Count;
+
+                                foreach (ObjectId alignmentId in alignmentIds)
+                                {
+                                    Alignment alignment = tr.GetObject(alignmentId, OpenMode.ForRead) as Alignment;
+                                    if (alignment == null) continue;
+
+                                    count++;
+                                    lblStatus.Text = $"Processing {count}/{total}: {alignment.Name}";
+                                    System.Windows.Forms.Application.DoEvents();
+
+                                    if (includeVertical)
+                                    {
+                                        string path = System.IO.Path.Combine(outputFolder, $"{alignment.Name}_Vertical.pdf");
+                                        GenerateVerticalReportPdf(alignment, path);
+                                    }
+
+                                    if (includeHorizontal)
+                                    {
+                                        string path = System.IO.Path.Combine(outputFolder, $"{alignment.Name}_Horizontal.pdf");
+                                        GenerateHorizontalReportPdf(alignment, path);
+                                    }
+                                }
+
+                                tr.Commit();
+
+                                progressBar.Visible = false;
+                                lblStatus.Text = $"Batch complete! Processed {count} alignments";
+
+                                MessageBox.Show(
+                                    $"Batch processing complete!\n\n{count} alignments processed.",
+                                    "Success",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Information
+                                );
+                            }
+                        }
+                    }
+                    catch (System.Exception ex)
+                    {
+                        progressBar.Visible = false;
+                        lblStatus.Text = "Error during batch processing";
+                        MessageBox.Show($"Error:\n\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+        }
+
+        // Helper methods to call the report generation methods
+        private void GenerateVerticalReport(Alignment alignment, string path)
+        {
+            var commands = new ReportCommands();
+            typeof(ReportCommands).GetMethod("GenerateVerticalReport",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(commands, new object[] { alignment, path });
+        }
+
+        private void GenerateVerticalReportPdf(Alignment alignment, string path)
+        {
+            var commands = new ReportCommands();
+            typeof(ReportCommands).GetMethod("GenerateVerticalReportPdf",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(commands, new object[] { alignment, path });
+        }
+
+        private void GenerateVerticalReportXml(Alignment alignment, string path)
+        {
+            var commands = new ReportCommands();
+            typeof(ReportCommands).GetMethod("GenerateVerticalReportXml",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(commands, new object[] { alignment, path });
+        }
+
+        private void GenerateHorizontalReport(Alignment alignment, string path)
+        {
+            var commands = new ReportCommands();
+            typeof(ReportCommands).GetMethod("GenerateHorizontalReport",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(commands, new object[] { alignment, path });
+        }
+
+        private void GenerateHorizontalReportPdf(Alignment alignment, string path)
+        {
+            var commands = new ReportCommands();
+            typeof(ReportCommands).GetMethod("GenerateHorizontalReportPdf",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(commands, new object[] { alignment, path });
+        }
+
+        private void GenerateHorizontalReportXml(Alignment alignment, string path)
+        {
+            var commands = new ReportCommands();
+            typeof(ReportCommands).GetMethod("GenerateHorizontalReportXml",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Invoke(commands, new object[] { alignment, path });
         }
     }
 }
