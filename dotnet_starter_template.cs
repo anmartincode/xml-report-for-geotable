@@ -447,7 +447,7 @@ namespace GeoTableReports
                         writer.WriteLine($"Horizontal Alignment Name: {alignmentName}");
                         writer.WriteLine($" Description: {alignmentDescription}");
                         writer.WriteLine($" Style: {alignmentStyle}");
-                        writer.WriteLine($"Vertical Alignment Name: {profileName}");
+                        writer.WriteLine($"Vertical Profile Name: {profileName}");
                         writer.WriteLine($" Description: {profileDescription}");
                         writer.WriteLine($" Style: {profileStyle}");
                         writer.WriteLine($" {"STATION",15} {"ELEVATION",15}");
@@ -1984,7 +1984,7 @@ namespace GeoTableReports
 
             rbVertical = new RadioButton
             {
-                Text = "Vertical Alignment",
+                Text = "Vertical Profile",
                 Location = new System.Drawing.Point(20, 25),
                 Checked = true,
                 AutoSize = true
@@ -2211,7 +2211,7 @@ namespace GeoTableReports
             var lblTypes = new System.Windows.Forms.Label { Text = "Report Types:", Location = new System.Drawing.Point(20, 75), AutoSize = true };
             this.Controls.Add(lblTypes);
 
-            chkVertical = new CheckBox { Text = "Vertical Alignment", Location = new System.Drawing.Point(40, 100), Checked = true, AutoSize = true };
+            chkVertical = new CheckBox { Text = "Vertical Profile", Location = new System.Drawing.Point(40, 100), Checked = true, AutoSize = true };
             chkHorizontal = new CheckBox { Text = "Horizontal Alignment", Location = new System.Drawing.Point(40, 125), Checked = true, AutoSize = true };
             this.Controls.Add(chkVertical);
             this.Controls.Add(chkHorizontal);
@@ -2302,7 +2302,7 @@ namespace GeoTableReports
 
             rbVertical = new RadioButton
             {
-                Text = "Vertical Alignment",
+                Text = "Vertical Profile",
                 Location = new System.Drawing.Point(15, 25),
                 Checked = true,
                 Width = 280
