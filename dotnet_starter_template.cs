@@ -2600,7 +2600,7 @@ namespace GeoTableReports
                     ws.Cells[row, 1].Style.Font.Bold = true;
                     ws.Cells[row, 1].Style.Font.Size = 12;
                     ws.Cells[row, 1].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-                    row += 2;
+                    row++;
 
                     // Headers row 1
                     int headerRow1 = row;
@@ -2629,6 +2629,8 @@ namespace GeoTableReports
                     // Style all headers
                     using (var range = ws.Cells[headerRow1, 1, row, 11])
                     {
+                        range.Style.Font.Name = "Arial";
+                        range.Style.Font.Size = 8;
                         range.Style.Font.Bold = true;
                         range.Style.Fill.PatternType = ExcelFillStyle.Solid;
                         range.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
@@ -2650,6 +2652,7 @@ namespace GeoTableReports
 
                     row++;
                     int startDataRow = row;
+                    int lastDataRow = row;
                     int curveNumber = 0;
 
                     // Process alignment entities
@@ -2680,6 +2683,64 @@ namespace GeoTableReports
                             ws.Cells[row, 3].Value = $"Error: {ex.Message}";
                             row++;
                         }
+                    }
+
+                    lastDataRow = row - 1;
+
+                    // Delete empty rows (rows where columns 1-7 are all empty)
+                    for (int r = lastDataRow; r >= startDataRow; r--)
+                    {
+                        bool isEmpty = true;
+                        for (int c = 1; c <= 7; c++)
+                        {
+                            if (ws.Cells[r, c].Value != null)
+                            {
+                                isEmpty = false;
+                                break;
+                            }
+                        }
+
+                        if (isEmpty)
+                        {
+                            ws.DeleteRow(r);
+                            lastDataRow--;
+                        }
+                    }
+
+                    // Apply Arial 8pt font, borders, and center alignment to all data cells
+                    for (int r = startDataRow; r <= lastDataRow; r++)
+                    {
+                        for (int c = 1; c <= 11; c++)
+                        {
+                            ws.Cells[r, c].Style.Font.Name = "Arial";
+                            ws.Cells[r, c].Style.Font.Size = 8;
+                            ws.Cells[r, c].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                            ws.Cells[r, c].Style.VerticalAlignment = ExcelVerticalAlignment.Center;
+
+                            // For columns 1-7, apply all borders
+                            if (c <= 7)
+                            {
+                                ws.Cells[r, c].Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                                ws.Cells[r, c].Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                                ws.Cells[r, c].Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                                ws.Cells[r, c].Style.Border.Right.Style = ExcelBorderStyle.Thin;
+                            }
+                            // For DATA columns (8-11), no borders - will be applied to perimeter only
+                        }
+                    }
+
+                    // Borders are applied per element group in the WriteGeoTable methods
+
+                    // Add overall outside border around entire DATA section (Thin style)
+                    for (int c = 8; c <= 11; c++)
+                    {
+                        ws.Cells[startDataRow, c].Style.Border.Top.Style = ExcelBorderStyle.Thin;
+                        ws.Cells[lastDataRow, c].Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
+                    }
+                    for (int r = startDataRow; r <= lastDataRow; r++)
+                    {
+                        ws.Cells[r, 8].Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                        ws.Cells[r, 11].Style.Border.Right.Style = ExcelBorderStyle.Thin;
                     }
 
                     // Set fixed column widths (more compact like the example)
@@ -2719,6 +2780,8 @@ namespace GeoTableReports
                 string pointLabel = (index == 0) ? "POT" : "PI";
 
                 ws.Cells[row, 1].Value = "TANGENT";
+                // Merge and center empty CURVE No. column
+                ws.Cells[row, 2].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 3].Value = pointLabel;
                 ws.Cells[row, 4].Value = FormatStation(line.StartStation);
                 ws.Cells[row, 5].Value = bearing;
@@ -2727,18 +2790,21 @@ namespace GeoTableReports
                 ws.Cells[row, 7].Value = x1;
                 ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
 
-                // DATA merged across H-K
+                // DATA - single merged cell for tangent
                 string data = $"L = {FormatDistanceFeet(line.Length)}";
                 ws.Cells[row, 8, row, 11].Merge = true;
                 ws.Cells[row, 8].Value = data;
+                ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 8].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 8].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
 
-                // Add borders around tangent row
-                for (int c = 1; c <= 11; c++)
+                // Add border around DATA group (single row)
+                for (int c = 8; c <= 11; c++)
                 {
                     ws.Cells[row, c].Style.Border.Top.Style = ExcelBorderStyle.Thin;
                     ws.Cells[row, c].Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
                 }
-                ws.Cells[row, 1].Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                ws.Cells[row, 8].Style.Border.Left.Style = ExcelBorderStyle.Thin;
                 ws.Cells[row, 11].Style.Border.Right.Style = ExcelBorderStyle.Thin;
 
                 return row + 1;
@@ -2789,37 +2855,88 @@ namespace GeoTableReports
                 ws.Cells[row, 7].Value = x1;
                 ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
 
-                // DATA for row 1 - spread across H-K
-                string row1Data = $"Δc = {FormatAngleDMS(delta)}    Da= {FormatAngleDMS(delta / 2.0)}    R= {FormatDistanceFeet(radius)}    Lc= {FormatDistanceFeet(arc.Length)}";
-                ws.Cells[row, 8, row, 11].Merge = true;
-                ws.Cells[row, 8].Value = row1Data;
+                // DATA for row 1 - individual cells
+                ws.Cells[row, 8].Value = $"Δc = {FormatAngleDMS(delta)}";
+                ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 8].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 8].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 9].Value = $"Da= {FormatAngleDMS(delta / 2.0)}";
+                ws.Cells[row, 9].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 9].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 9].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 10].Value = $"R= {FormatDistanceFeet(radius)}";
+                ws.Cells[row, 10].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 10].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 10].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 11].Value = $"Lc= {FormatDistanceFeet(arc.Length)}";
+                ws.Cells[row, 11].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 11].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 2: PI
+                // Row 2: PI - merge empty cells (columns 4-5)
                 ws.Cells[row, 3].Value = "PI";
+                ws.Cells[row, 4, row, 5].Merge = true;
+                ws.Cells[row, 4].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 6].Value = yPI;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
                 ws.Cells[row, 7].Value = xPI;
                 ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
 
-                // DATA for row 2
-                string row2Data = $"V= -- MPH    Ea= --\"    Ee= --\"    Eu= --\"";
-                ws.Cells[row, 8, row, 11].Merge = true;
-                ws.Cells[row, 8].Value = row2Data;
+                // DATA for row 2 - individual cells
+                ws.Cells[row, 8].Value = "V= -- MPH";
+                ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 8].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 8].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 9].Value = "Ea= --\"";
+                ws.Cells[row, 9].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 9].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 9].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 10].Value = "Ee= --\"";
+                ws.Cells[row, 10].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 10].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 10].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 11].Value = "Eu= --\"";
+                ws.Cells[row, 11].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 11].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 3: CS/PT
+                // Row 3: CS/PT - merge empty cell (column 5)
                 ws.Cells[row, 3].Value = "CS";
                 ws.Cells[row, 4].Value = FormatStation(arc.EndStation);
+                ws.Cells[row, 5].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 6].Value = y2;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
                 ws.Cells[row, 7].Value = x2;
                 ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
 
-                // DATA for row 3
-                string row3Data = $"Tc= {FormatDistanceFeet(tc)}    Ec= {FormatDistanceFeet(ec)}    CC:N {centerN:F4}    E {centerE:F4}";
-                ws.Cells[row, 8, row, 11].Merge = true;
-                ws.Cells[row, 8].Value = row3Data;
+                // DATA for row 3 - individual cells
+                ws.Cells[row, 8].Value = $"Tc= {FormatDistanceFeet(tc)}";
+                ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 8].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 8].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 9].Value = $"Ec= {FormatDistanceFeet(ec)}";
+                ws.Cells[row, 9].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 9].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 9].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 10].Value = $"CC:N {centerN:F4}";
+                ws.Cells[row, 10].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 10].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 10].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 11].Value = $"E {centerE:F4}";
+                ws.Cells[row, 11].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 11].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
                 // Merge ELEMENT and CURVE No. columns for all 3 rows
@@ -2829,15 +2946,15 @@ namespace GeoTableReports
                 ws.Cells[startRow, 2].Style.VerticalAlignment = ExcelVerticalAlignment.Top;
                 ws.Cells[startRow, 2].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
 
-                // Add borders around the entire curve group
-                for (int c = 1; c <= 11; c++)
+                // Add border around DATA group (3 rows)
+                for (int c = 8; c <= 11; c++)
                 {
                     ws.Cells[startRow, c].Style.Border.Top.Style = ExcelBorderStyle.Thin;
                     ws.Cells[startRow + 2, c].Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
                 }
                 for (int r = startRow; r <= startRow + 2; r++)
                 {
-                    ws.Cells[r, 1].Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                    ws.Cells[r, 8].Style.Border.Left.Style = ExcelBorderStyle.Thin;
                     ws.Cells[r, 11].Style.Border.Right.Style = ExcelBorderStyle.Thin;
                 }
 
@@ -2881,39 +2998,74 @@ namespace GeoTableReports
                 ws.Cells[row, 7].Value = x1;
                 ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
 
-                // DATA for row 1
-                string row1Data = $"θs = {FormatAngleDMS(theta)}    Ls= {FormatDistanceFeet(spiralLength)}    LT= {FormatDistanceFeet(spiralLength * 0.67)}    STs= {FormatDistanceFeet(spiralLength * 0.33)}";
-                ws.Cells[row, 8, row, 11].Merge = true;
-                ws.Cells[row, 8].Value = row1Data;
+                // DATA for row 1 - individual cells
+                ws.Cells[row, 8].Value = $"θs = {FormatAngleDMS(theta)}";
+                ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 8].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 8].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 9].Value = $"Ls= {FormatDistanceFeet(spiralLength)}";
+                ws.Cells[row, 9].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 9].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 9].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 10].Value = $"LT= {FormatDistanceFeet(spiralLength * 0.67)}";
+                ws.Cells[row, 10].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 10].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 10].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 11].Value = $"STs= {FormatDistanceFeet(spiralLength * 0.33)}";
+                ws.Cells[row, 11].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 11].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 2: Parameters
+                // Row 2: Parameters - merge empty cell (column 5)
                 ws.Cells[row, 3].Value = "ST";
                 ws.Cells[row, 4].Value = FormatStation(spiral.EndStation);
+                ws.Cells[row, 5].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 6].Value = y2;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
                 ws.Cells[row, 7].Value = x2;
                 ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
 
-                // DATA for row 2
-                string row2Data = $"Xs= {FormatDistanceFeet(xs)}    Ys= {FormatDistanceFeet(ys)}    P= {FormatDistanceFeet(p)}    K= {FormatDistanceFeet(k)}";
-                ws.Cells[row, 8, row, 11].Merge = true;
-                ws.Cells[row, 8].Value = row2Data;
+                // DATA for row 2 - individual cells
+                ws.Cells[row, 8].Value = $"Xs= {FormatDistanceFeet(xs)}";
+                ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 8].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 8].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 9].Value = $"Ys= {FormatDistanceFeet(ys)}";
+                ws.Cells[row, 9].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 9].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 9].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 10].Value = $"P= {FormatDistanceFeet(p)}";
+                ws.Cells[row, 10].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 10].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 10].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
+
+                ws.Cells[row, 11].Value = $"K= {FormatDistanceFeet(k)}";
+                ws.Cells[row, 11].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                ws.Cells[row, 11].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Merge ELEMENT column for both rows
+                // Merge ELEMENT column for both rows and CURVE No. column for both rows
                 ws.Cells[startRow, 1, startRow + 1, 1].Merge = true;
                 ws.Cells[startRow, 1].Style.VerticalAlignment = ExcelVerticalAlignment.Top;
+                ws.Cells[startRow, 2, startRow + 1, 2].Merge = true;
+                ws.Cells[startRow, 2].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
 
-                // Add borders around the entire spiral group
-                for (int c = 1; c <= 11; c++)
+                // Add border around DATA group (2 rows)
+                for (int c = 8; c <= 11; c++)
                 {
                     ws.Cells[startRow, c].Style.Border.Top.Style = ExcelBorderStyle.Thin;
                     ws.Cells[startRow + 1, c].Style.Border.Bottom.Style = ExcelBorderStyle.Thin;
                 }
                 for (int r = startRow; r <= startRow + 1; r++)
                 {
-                    ws.Cells[r, 1].Style.Border.Left.Style = ExcelBorderStyle.Thin;
+                    ws.Cells[r, 8].Style.Border.Left.Style = ExcelBorderStyle.Thin;
                     ws.Cells[r, 11].Style.Border.Right.Style = ExcelBorderStyle.Thin;
                 }
 
@@ -2940,7 +3092,7 @@ namespace GeoTableReports
 
                     using (Document document = new Document(pdfDoc))
                     {
-                        // Create font
+                        // Create fonts - use Arial (Helvetica)
                         PdfFont font = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
                         PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
 
@@ -2950,54 +3102,108 @@ namespace GeoTableReports
                             .SetFont(boldFont)
                             .SetFontSize(12)
                             .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                            .SetMarginBottom(10);
+                            .SetMarginBottom(5);
                         document.Add(title);
 
-                        // Create table with 11 columns
-                        float[] columnWidths = { 10f, 8f, 7f, 10f, 15f, 12f, 12f, 13f, 13f, 13f, 13f };
+                        // Create table with 11 columns - adjusted widths to match Excel
+                        float[] columnWidths = { 11f, 10f, 7f, 11f, 15f, 13f, 13f, 16f, 14f, 16f, 16f };
                         iText.Layout.Element.Table table = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(columnWidths));
                         table.SetWidth(UnitValue.CreatePercentValue(100));
                         table.SetFont(font).SetFontSize(8);
 
-                        // Headers
-                        string[] headers = { "ELEMENT", "CURVE No.", "POINT", "STATION", "BEARING", "Northing", "Easting", "DATA", "", "", "" };
-                        foreach (string header in headers)
-                        {
-                            iText.Layout.Element.Cell cell = new iText.Layout.Element.Cell()
-                                .Add(new Paragraph(header).SetFont(boldFont).SetFontSize(8))
-                                .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
-                                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE);
-                            table.AddHeaderCell(cell);
-                        }
+                        // Header row 1 - COORDINATES and DATA merged headers
+                        table.AddHeaderCell(CreateHeaderCell("ELEMENT", boldFont, 2, 1));
+                        table.AddHeaderCell(CreateHeaderCell("CURVE No.", boldFont, 2, 1));
+                        table.AddHeaderCell(CreateHeaderCell("POINT", boldFont, 2, 1));
+                        table.AddHeaderCell(CreateHeaderCell("STATION", boldFont, 2, 1));
+                        table.AddHeaderCell(CreateHeaderCell("BEARING", boldFont, 2, 1));
+                        table.AddHeaderCell(CreateHeaderCell("COORDINATES", boldFont, 1, 2));
 
-                        // Process entities (simplified - full implementation would be similar to Excel)
+                        // DATA header with only outside border
+                        table.AddHeaderCell(new iText.Layout.Element.Cell(1, 4)
+                            .Add(new Paragraph("DATA").SetFont(boldFont).SetFontSize(8))
+                            .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
+                            .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                            .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                            .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 1))
+                            .SetBorderBottom(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 1))
+                            .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 1)));
+
+                        // Header row 2 - Northing, Easting subdivisions (DATA columns with no inside borders)
+                        table.AddHeaderCell(CreateHeaderCell("Northing", boldFont, 1, 1));
+                        table.AddHeaderCell(CreateHeaderCell("Easting", boldFont, 1, 1));
+
+                        // DATA row 2 cells - no inside borders, only bottom border to complete the header
+                        table.AddHeaderCell(new iText.Layout.Element.Cell()
+                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(8))
+                            .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
+                            .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                            .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                            .SetBorderTop(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 1))
+                            .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 1))
+                            .SetBorderRight(iText.Layout.Borders.Border.NO_BORDER));
+                        table.AddHeaderCell(new iText.Layout.Element.Cell()
+                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(8))
+                            .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
+                            .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                            .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                            .SetBorderTop(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 1))
+                            .SetBorderLeft(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetBorderRight(iText.Layout.Borders.Border.NO_BORDER));
+                        table.AddHeaderCell(new iText.Layout.Element.Cell()
+                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(8))
+                            .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
+                            .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                            .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                            .SetBorderTop(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 1))
+                            .SetBorderLeft(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetBorderRight(iText.Layout.Borders.Border.NO_BORDER));
+                        table.AddHeaderCell(new iText.Layout.Element.Cell()
+                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(8))
+                            .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
+                            .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                            .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                            .SetBorderTop(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 1))
+                            .SetBorderLeft(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 1)));
+
+                        // Process alignment entities
                         int curveNumber = 0;
                         for (int i = 0; i < alignment.Entities.Count; i++)
                         {
                             AlignmentEntity entity = alignment.Entities[i];
                             if (entity == null) continue;
 
-                            // Add rows based on entity type (simplified)
-                            if (entity is AlignmentLine line)
+                            try
                             {
-                                table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("TANGENT")));
-                                table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("")));
-                                table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(i == 0 ? "POT" : "PI")));
-                                table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatStation(line.StartStation))));
-
-                                double x = 0, y = 0, z = 0;
-                                alignment.PointLocation(line.StartStation, 0, 0, ref x, ref y, ref z);
-
-                                table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatBearingDMS(line.Direction))));
-                                table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{y:F4}")));
-                                table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{x:F4}")));
-                                table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatDistanceFeet(line.Length))));
-                                table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("")));
-                                table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("")));
-                                table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("")));
+                                switch (entity.EntityType)
+                                {
+                                    case AlignmentEntityType.Line:
+                                        AddGeoTableTangentPdf(table, entity as AlignmentLine, alignment, i, font);
+                                        break;
+                                    case AlignmentEntityType.Arc:
+                                        curveNumber++;
+                                        AddGeoTableCurvePdf(table, entity as AlignmentArc, alignment, i, curveNumber, font);
+                                        break;
+                                    case AlignmentEntityType.Spiral:
+                                        AddGeoTableSpiralPdf(table, entity as AlignmentSpiral, alignment, i, font);
+                                        break;
+                                }
                             }
-                            // Similar handling for curves and spirals (abbreviated for space)
+                            catch (System.Exception ex)
+                            {
+                                // Add error row
+                                table.AddCell(CreateDataCell("ERROR", font));
+                                for (int j = 1; j < 11; j++)
+                                {
+                                    table.AddCell(CreateDataCell($"Error: {ex.Message}", font));
+                                }
+                            }
                         }
 
                         document.Add(table);
@@ -3008,6 +3214,213 @@ namespace GeoTableReports
             {
                 throw new System.Exception($"Error generating GeoTable PDF: {ex.Message}", ex);
             }
+        }
+
+        private iText.Layout.Element.Cell CreateHeaderCell(string text, PdfFont font, int rowspan, int colspan)
+        {
+            return new iText.Layout.Element.Cell(rowspan, colspan)
+                .Add(new Paragraph(text).SetFont(font).SetFontSize(8))
+                .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1));
+        }
+
+        private iText.Layout.Element.Cell CreateDataCell(string text, PdfFont font)
+        {
+            return new iText.Layout.Element.Cell()
+                .Add(new Paragraph(text).SetFont(font).SetFontSize(8))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1));
+        }
+
+        private iText.Layout.Element.Cell CreateDataCellNoBorder(string text, PdfFont font)
+        {
+            return new iText.Layout.Element.Cell()
+                .Add(new Paragraph(text).SetFont(font).SetFontSize(8))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                .SetBackgroundColor(ColorConstants.WHITE)
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+        }
+
+        private void AddGeoTableTangentPdf(iText.Layout.Element.Table table, AlignmentLine line, CivDb.Alignment alignment, int index, PdfFont font)
+        {
+            if (line == null) return;
+
+            double x1 = 0, y1 = 0, z1 = 0;
+            alignment.PointLocation(line.StartStation, 0, 0, ref x1, ref y1, ref z1);
+            string bearing = FormatBearingDMS(line.Direction);
+            string pointLabel = (index == 0) ? "POT" : "PI";
+
+            table.AddCell(CreateDataCell("TANGENT", font));
+            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell(pointLabel, font));
+            table.AddCell(CreateDataCell(FormatStation(line.StartStation), font));
+            table.AddCell(CreateDataCell(bearing, font));
+            table.AddCell(CreateDataCell($"{y1:F4}", font));
+            table.AddCell(CreateDataCell($"{x1:F4}", font));
+
+            // DATA - merge 4 columns with border around the group only
+            table.AddCell(new iText.Layout.Element.Cell(1, 4)
+                .Add(new Paragraph($"L = {FormatDistanceFeet(line.Length)}").SetFont(font).SetFontSize(8))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                .SetBackgroundColor(ColorConstants.WHITE)
+                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+        }
+
+        private void AddGeoTableCurvePdf(iText.Layout.Element.Table table, AlignmentArc arc, CivDb.Alignment alignment, int index, int curveNumber, PdfFont font)
+        {
+            if (arc == null) return;
+
+            // Calculate curve properties
+            double radius = Math.Abs(arc.Radius);
+            double delta = Math.Abs(arc.Delta);
+            double tc = CalculateTangentDistance(radius, delta);
+            double ec = CalculateExternalDistance(radius, delta);
+
+            double x1 = 0, y1 = 0, z1 = 0, x2 = 0, y2 = 0, z2 = 0;
+            alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
+            alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+            // Calculate curve center
+            CalculateCurveCenter(arc, alignment, out double centerN, out double centerE);
+
+            // Calculate PI location (approximate - midpoint elevated)
+            double midStation = (arc.StartStation + arc.EndStation) / 2.0;
+            double xPI = 0, yPI = 0, zPI = 0;
+            alignment.PointLocation(midStation, 0, 0, ref xPI, ref yPI, ref zPI);
+
+            string curveDir = arc.Clockwise ? "R" : "L";
+            string curveLabel = $"{curveNumber}-{curveDir}";
+
+            // Row 1: POC
+            table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph("CURVE").SetFont(font).SetFontSize(8))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
+            table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph(curveLabel).SetFont(font).SetFontSize(8))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
+            table.AddCell(CreateDataCell("POC", font));
+            table.AddCell(CreateDataCell(FormatStation(arc.StartStation), font));
+            table.AddCell(CreateDataCell(FormatBearingDMS(arc.StartDirection), font));
+            table.AddCell(CreateDataCell($"{y1:F4}", font));
+            table.AddCell(CreateDataCell($"{x1:F4}", font));
+
+            // DATA row 1 - no inside borders, left and top border only
+            table.AddCell(CreateDataCellNoBorder($"Δc = {FormatAngleDMS(delta)}", font)
+                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"Da= {FormatAngleDMS(delta / 2.0)}", font)
+                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"R= {FormatDistanceFeet(radius)}", font)
+                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"Lc= {FormatDistanceFeet(arc.Length)}", font)
+                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+
+            // Row 2: PI
+            table.AddCell(CreateDataCell("PI", font));
+            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell($"{yPI:F4}", font));
+            table.AddCell(CreateDataCell($"{xPI:F4}", font));
+
+            // DATA row 2 - no inside borders, left border only
+            table.AddCell(CreateDataCellNoBorder("V= -- MPH", font)
+                .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder("Ea= --\"", font));
+            table.AddCell(CreateDataCellNoBorder("Ee= --\"", font));
+            table.AddCell(CreateDataCellNoBorder("Eu= --\"", font)
+                .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+
+            // Row 3: CS
+            table.AddCell(CreateDataCell("CS", font));
+            table.AddCell(CreateDataCell(FormatStation(arc.EndStation), font));
+            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell($"{y2:F4}", font));
+            table.AddCell(CreateDataCell($"{x2:F4}", font));
+
+            // DATA row 3 - no inside borders, left and bottom border only
+            table.AddCell(CreateDataCellNoBorder($"Tc= {FormatDistanceFeet(tc)}", font)
+                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"Ec= {FormatDistanceFeet(ec)}", font)
+                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"CC:N {centerN:F4}", font)
+                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"E {centerE:F4}", font)
+                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+        }
+
+        private void AddGeoTableSpiralPdf(iText.Layout.Element.Table table, AlignmentSpiral spiral, CivDb.Alignment alignment, int index, PdfFont font)
+        {
+            if (spiral == null) return;
+
+            double spiralLength = spiral.Length;
+            double spiralRadius = 1000; // Default
+            double theta = CalculateSpiralAngle(spiralLength, spiralRadius);
+            double xs = CalculateSpiralX(spiralLength, spiralRadius);
+            double ys = CalculateSpiralY(spiralLength, spiralRadius);
+            double p = spiralLength * spiralLength / (6.0 * spiralRadius);
+            double k = spiralLength - (spiralLength * spiralLength * spiralLength) / (40.0 * spiralRadius * spiralRadius);
+
+            double x1 = 0, y1 = 0, z1 = 0, x2 = 0, y2 = 0, z2 = 0;
+            alignment.PointLocation(spiral.StartStation, 0, 0, ref x1, ref y1, ref z1);
+            alignment.PointLocation(spiral.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+            // Row 1: TS
+            table.AddCell(new iText.Layout.Element.Cell(2, 1).Add(new Paragraph("SPIRAL").SetFont(font).SetFontSize(8))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
+            table.AddCell(new iText.Layout.Element.Cell(2, 1).Add(new Paragraph("").SetFont(font).SetFontSize(8))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
+            table.AddCell(CreateDataCell("TS", font));
+            table.AddCell(CreateDataCell(FormatStation(spiral.StartStation), font));
+            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell($"{y1:F4}", font));
+            table.AddCell(CreateDataCell($"{x1:F4}", font));
+
+            // DATA row 1 - no inside borders, left and top border only
+            table.AddCell(CreateDataCellNoBorder($"θs = {FormatAngleDMS(theta)}", font)
+                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"Ls= {FormatDistanceFeet(spiralLength)}", font)
+                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"LT= {FormatDistanceFeet(spiralLength * 0.67)}", font)
+                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"STs= {FormatDistanceFeet(spiralLength * 0.33)}", font)
+                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+
+            // Row 2: ST
+            table.AddCell(CreateDataCell("ST", font));
+            table.AddCell(CreateDataCell(FormatStation(spiral.EndStation), font));
+            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell($"{y2:F4}", font));
+            table.AddCell(CreateDataCell($"{x2:F4}", font));
+
+            // DATA row 2 - no inside borders, left and bottom border only
+            table.AddCell(CreateDataCellNoBorder($"Xs= {FormatDistanceFeet(xs)}", font)
+                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"Ys= {FormatDistanceFeet(ys)}", font)
+                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"P= {FormatDistanceFeet(p)}", font)
+                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"K= {FormatDistanceFeet(k)}", font)
+                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
         }
 
     }
