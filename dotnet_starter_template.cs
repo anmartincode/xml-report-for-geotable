@@ -772,10 +772,13 @@ namespace GeoTableReports
                     writer.WriteLine($" {"STATION",15} {"NORTHING",15} {"EASTING",15}");
                     writer.WriteLine();
 
+                    // Reorder entities to match InRails format (Linear, then Spiral/Arc associated with it)
+                    var reorderedEntities = ReorderEntitiesForInRails(alignment);
+
                     // Process each entity
-                    for (int i = 0; i < alignment.Entities.Count; i++)
+                    for (int i = 0; i < reorderedEntities.Count; i++)
                     {
-                        AlignmentEntity entity = alignment.Entities[i];
+                        AlignmentEntity entity = reorderedEntities[i];
                         if (entity == null) continue;
 
                         try
@@ -812,6 +815,67 @@ namespace GeoTableReports
             }
         }
 
+        private System.Collections.Generic.List<AlignmentEntity> ReorderEntitiesForInRails(CivDb.Alignment alignment)
+        {
+            var reordered = new System.Collections.Generic.List<AlignmentEntity>();
+
+            // InRails format groups elements by showing Linear elements first,
+            // then Spirals/Arcs that occur within or between them
+            // Strategy: Output Linear elements, then interleave Spirals/Arcs based on station order
+
+            var allEntities = new System.Collections.Generic.List<AlignmentEntity>();
+            for (int i = 0; i < alignment.Entities.Count; i++)
+            {
+                if (alignment.Entities[i] != null)
+                    allEntities.Add(alignment.Entities[i]);
+            }
+
+            // Separate into groups
+            var linearElements = new System.Collections.Generic.List<AlignmentEntity>();
+            var curveElements = new System.Collections.Generic.List<AlignmentEntity>();
+
+            foreach (var entity in allEntities)
+            {
+                if (entity.EntityType == AlignmentEntityType.Line)
+                    linearElements.Add(entity);
+                else
+                    curveElements.Add(entity);
+            }
+
+            // Build output: For each linear element, add it, then add any curves that start before the next linear
+            for (int i = 0; i < linearElements.Count; i++)
+            {
+                var currentLine = linearElements[i];
+                reordered.Add(currentLine);
+
+                // Get the station range for curves to insert
+                double nextLineStation = (i < linearElements.Count - 1)
+                    ? (linearElements[i + 1] as dynamic).StartStation
+                    : double.MaxValue;
+
+                // Add any spirals/arcs that start after this line and before the next
+                foreach (var curve in curveElements)
+                {
+                    double curveStart = (curve as dynamic).StartStation;
+                    double lineEnd = (currentLine as dynamic).EndStation;
+
+                    if (curveStart >= lineEnd && curveStart < nextLineStation && !reordered.Contains(curve))
+                    {
+                        reordered.Add(curve);
+                    }
+                }
+            }
+
+            // Add any remaining curves not yet added
+            foreach (var curve in curveElements)
+            {
+                if (!reordered.Contains(curve))
+                    reordered.Add(curve);
+            }
+
+            return reordered;
+        }
+
         private void WriteLinearElement(System.IO.StreamWriter writer, AlignmentLine line, CivDb.Alignment alignment, int index)
         {
             if (line == null)
@@ -833,24 +897,30 @@ namespace GeoTableReports
 
                 writer.WriteLine("Element: Linear");
 
-                // Determine point labels based on position
-                if (index == 0)
-                    writer.WriteLine($" POT ( ) {FormatStation(line.StartStation),15} {y1,15:F4} {x1,15:F4}");
-                else
-                    writer.WriteLine($" PI  ( ) {FormatStation(line.StartStation),15} {y1,15:F4} {x1,15:F4}");
+                // InRails format uses ST (Start of Tangent) for linear element start points
+                writer.WriteLine($" ST  ( ) {FormatStation(line.StartStation),15} {y1,15:F4} {x1,15:F4}");
 
-                // Check if next element exists to determine end point label
-                string endLabel = "PI  ";
-                if (index < alignment.Entities.Count - 1)
+                // Determine end point label based on what element type comes after this tangent
+                // We need to look ahead in the ORIGINAL alignment entities to see what follows this line
+                string endLabel = "PI  ";  // Default if nothing follows
+
+                // Find this line in the original alignment entities
+                for (int i = 0; i < alignment.Entities.Count; i++)
                 {
-                    var nextEntity = alignment.Entities[index + 1];
-                    if (nextEntity.EntityType == AlignmentEntityType.Spiral)
-                        endLabel = "TS  ";
-                    else if (nextEntity.EntityType == AlignmentEntityType.Arc)
-                        endLabel = "PC  ";
+                    if (alignment.Entities[i] == line)
+                    {
+                        // Check what comes next in the original alignment
+                        if (i < alignment.Entities.Count - 1)
+                        {
+                            var nextEntity = alignment.Entities[i + 1];
+                            if (nextEntity.EntityType == AlignmentEntityType.Spiral)
+                                endLabel = "TS  ";  // Tangent to Spiral
+                            else if (nextEntity.EntityType == AlignmentEntityType.Arc)
+                                endLabel = "PC  ";  // Point of Curvature (Tangent to Arc)
+                        }
+                        break;
+                    }
                 }
-                else
-                    endLabel = "POT ";
 
                 writer.WriteLine($" {endLabel}( ) {FormatStation(line.EndStation),15} {y2,15:F4} {x2,15:F4}");
                 writer.WriteLine($" Tangent Direction: {bearing}");
@@ -942,30 +1012,55 @@ namespace GeoTableReports
 
                 alignment.PointLocation(spiral.StartStation, 0, 0, ref x1, ref y1, ref z1);
                 alignment.PointLocation(spiral.EndStation, 0, 0, ref x2, ref y2, ref z2);
-                alignment.PointLocation((spiral.StartStation + spiral.EndStation) / 2, 0, 0, ref xMid, ref yMid, ref zMid);
+
+                // Calculate spiral point at arc length l (midpoint for now)
+                double spiralMidStation = (spiral.StartStation + spiral.EndStation) / 2;
+                alignment.PointLocation(spiralMidStation, 0, 0, ref xMid, ref yMid, ref zMid);
 
                 bool isEntry = spiral.RadiusIn > spiral.RadiusOut || (spiral.RadiusIn == 0 && spiral.RadiusOut > 0);
-                double radiusIn = spiral.RadiusIn > 0 ? spiral.RadiusIn : 0;
-                double radiusOut = spiral.RadiusOut > 0 ? spiral.RadiusOut : 0;
+                double R1 = isEntry ? double.PositiveInfinity : (spiral.RadiusIn > 0 ? spiral.RadiusIn : 0);  // Radius of curve 1
+                double R2 = isEntry ? (spiral.RadiusOut > 0 ? spiral.RadiusOut : 0) : double.PositiveInfinity;  // Radius of curve 2
+                double L = spiral.Length;  // Total arc length of spiral
+
+                // Calculate clothoid parameter A (flatness of spiral): A = sqrt(L*R)
+                double R = isEntry ? R2 : R1;
+                double A = 0;
+                if (R > 0 && !double.IsInfinity(R))
+                {
+                    A = Math.Sqrt(L * R);
+                }
+
+                // Calculate central angle theta at spiral point
+                double theta = 0;
+                if (R > 0 && !double.IsInfinity(R))
+                {
+                    theta = L / (2 * R);  // Total angle subtended by spiral (radians)
+                }
 
                 writer.WriteLine("Element: Clothoid");
 
                 if (isEntry)
                 {
                     writer.WriteLine($" TS  ( ) {FormatStation(spiral.StartStation),15} {y1,15:F4} {x1,15:F4}");
-                    writer.WriteLine($" SPI ( ) {FormatStation((spiral.StartStation + spiral.EndStation) / 2),15} {yMid,15:F4} {xMid,15:F4}");
+                    writer.WriteLine($" SPI ( ) {FormatStation(spiralMidStation),15} {yMid,15:F4} {xMid,15:F4}");
                     writer.WriteLine($" SC  ( ) {FormatStation(spiral.EndStation),15} {y2,15:F4} {x2,15:F4}");
                 }
                 else
                 {
                     writer.WriteLine($" CS  ( ) {FormatStation(spiral.StartStation),15} {y1,15:F4} {x1,15:F4}");
-                    writer.WriteLine($" SPI ( ) {FormatStation((spiral.StartStation + spiral.EndStation) / 2),15} {yMid,15:F4} {xMid,15:F4}");
+                    writer.WriteLine($" SPI ( ) {FormatStation(spiralMidStation),15} {yMid,15:F4} {xMid,15:F4}");
                     writer.WriteLine($" ST  ( ) {FormatStation(spiral.EndStation),15} {y2,15:F4} {x2,15:F4}");
                 }
 
-                writer.WriteLine($" Entrance Radius: {radiusIn,15:F4}");
-                writer.WriteLine($" Exit Radius: {radiusOut,15:F4}");
-                writer.WriteLine($" Length: {spiral.Length,15:F4}");
+                // Output spiral parameters
+                writer.WriteLine($" R1 (Radius of curve 1): {(double.IsInfinity(R1) ? "Infinite" : $"{R1:F4}"),15}");
+                writer.WriteLine($" R2 (Radius of curve 2): {(double.IsInfinity(R2) ? "Infinite" : $"{R2:F4}"),15}");
+                writer.WriteLine($" SS (Spiral start): {FormatStation(spiral.StartStation),15}");
+                writer.WriteLine($" SE (Spiral end): {FormatStation(spiral.EndStation),15}");
+                writer.WriteLine($" SP (Spiral point at arc length l): {FormatStation(spiralMidStation),15}");
+                writer.WriteLine($" Θ (Central angle at spiral point): {FormatAngle(theta * 180.0 / Math.PI)}");
+                writer.WriteLine($" L (Total arc length): {L,15:F4}");
+                writer.WriteLine($" A (Flatness parameter): {A,15:F4}");
                 writer.WriteLine();
             }
             catch (System.Exception ex)
@@ -980,7 +1075,7 @@ namespace GeoTableReports
         {
             int sta = (int)(station / 100);
             double offset = station - (sta * 100);
-            return $"{sta}+{offset:F2}";
+            return $"{sta:D2}+{offset:F2}";
         }
 
         private string FormatBearing(double radians)
@@ -1422,10 +1517,13 @@ namespace GeoTableReports
                 document.Add(headerTable);
                 document.Add(new Paragraph("\n"));
 
+                // Reorder entities to match InRails format
+                var reorderedEntities = ReorderEntitiesForInRails(alignment);
+
                 // Process each entity
-                for (int i = 0; i < alignment.Entities.Count; i++)
+                for (int i = 0; i < reorderedEntities.Count; i++)
                 {
-                    AlignmentEntity entity = alignment.Entities[i];
+                    AlignmentEntity entity = reorderedEntities[i];
                     if (entity == null) continue;
 
                     try
@@ -1491,26 +1589,30 @@ namespace GeoTableReports
                 document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10));
                 document.Add(new Paragraph("\n").SetFontSize(5));
 
-                // Determine point labels based on position
-                if (index == 0)
-                    AddHorizontalDataRow(document, "POT ( ) ", FormatStation(line.StartStation), y1, x1, normalFont);
-                else
-                    AddHorizontalDataRow(document, "PI  ( ) ", FormatStation(line.StartStation), y1, x1, normalFont);
+                // InRails format uses ST (Start of Tangent) for linear element start points
+                AddHorizontalDataRow(document, "ST  ( ) ", FormatStation(line.StartStation), y1, x1, normalFont);
 
-                // Check if next element exists to determine end point label
-                string endLabel;
-                if (index < alignment.Entities.Count - 1)
+                // Determine end point label based on what element type comes after this tangent
+                // We need to look ahead in the ORIGINAL alignment entities to see what follows this line
+                string endLabel = "PI  ( ) ";  // Default if nothing follows
+
+                // Find this line in the original alignment entities
+                for (int i = 0; i < alignment.Entities.Count; i++)
                 {
-                    var nextEntity = alignment.Entities[index + 1];
-                    if (nextEntity.EntityType == AlignmentEntityType.Spiral)
-                        endLabel = "TS  ( ) ";
-                    else if (nextEntity.EntityType == AlignmentEntityType.Arc)
-                        endLabel = "PC  ( ) ";
-                    else
-                        endLabel = "PI  ( ) ";
+                    if (alignment.Entities[i] == line)
+                    {
+                        // Check what comes next in the original alignment
+                        if (i < alignment.Entities.Count - 1)
+                        {
+                            var nextEntity = alignment.Entities[i + 1];
+                            if (nextEntity.EntityType == AlignmentEntityType.Spiral)
+                                endLabel = "TS  ( ) ";  // Tangent to Spiral
+                            else if (nextEntity.EntityType == AlignmentEntityType.Arc)
+                                endLabel = "PC  ( ) ";  // Point of Curvature (Tangent to Arc)
+                        }
+                        break;
+                    }
                 }
-                else
-                    endLabel = "POT ( ) ";
 
                 AddHorizontalDataRow(document, endLabel, FormatStation(line.EndStation), y2, x2, normalFont);
                 document.Add(new Paragraph($"Tangent Direction: {bearing}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
@@ -3087,29 +3189,33 @@ namespace GeoTableReports
                 using (PdfWriter writer = new PdfWriter(outputPath))
                 using (PdfDocument pdfDoc = new PdfDocument(writer))
                 {
-                    // Set to landscape
+                    // Set to landscape with reduced margins
                     pdfDoc.SetDefaultPageSize(PageSize.LETTER.Rotate());
 
-                    using (Document document = new Document(pdfDoc))
+                    using (Document document = new Document(pdfDoc, PageSize.LETTER.Rotate(), false))
                     {
-                        // Create fonts - use Arial (Helvetica)
+                        // Set smaller margins to fit content
+                        document.SetMargins(20, 20, 20, 20);
+
+                        // Create fonts - use Arial (Helvetica) with smaller sizes
                         PdfFont font = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
                         PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
 
-                        // Title
+                        // Title - smaller font
                         string trackName = alignment.Name?.ToUpper() ?? "TRACK GEOMETRY DATA";
                         Paragraph title = new Paragraph($"TRACK GEOMETRY DATA - {trackName}")
                             .SetFont(boldFont)
-                            .SetFontSize(12)
+                            .SetFontSize(10)
                             .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                            .SetMarginBottom(5);
+                            .SetMarginBottom(3);
                         document.Add(title);
 
-                        // Create table with 11 columns - adjusted widths to match Excel
-                        float[] columnWidths = { 11f, 10f, 7f, 11f, 15f, 13f, 13f, 16f, 14f, 16f, 16f };
+                        // Create table with 11 columns - optimized widths for compact display
+                        float[] columnWidths = { 9f, 8f, 6f, 9f, 12f, 11f, 11f, 13f, 12f, 13f, 13f };
                         iText.Layout.Element.Table table = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(columnWidths));
                         table.SetWidth(UnitValue.CreatePercentValue(100));
-                        table.SetFont(font).SetFontSize(8);
+                        table.SetFont(font).SetFontSize(6.5f);
+                        table.SetFixedLayout();
 
                         // Header row 1 - COORDINATES and DATA merged headers
                         table.AddHeaderCell(CreateHeaderCell("ELEMENT", boldFont, 2, 1));
@@ -3121,14 +3227,15 @@ namespace GeoTableReports
 
                         // DATA header with only outside border
                         table.AddHeaderCell(new iText.Layout.Element.Cell(1, 4)
-                            .Add(new Paragraph("DATA").SetFont(boldFont).SetFontSize(8))
+                            .Add(new Paragraph("DATA").SetFont(boldFont).SetFontSize(6.5f))
                             .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
                             .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                             .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
-                            .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 1))
+                            .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
                             .SetBorderBottom(iText.Layout.Borders.Border.NO_BORDER)
-                            .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 1))
-                            .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 1)));
+                            .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                            .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                            .SetPadding(1));
 
                         // Header row 2 - Northing, Easting subdivisions (DATA columns with no inside borders)
                         table.AddHeaderCell(CreateHeaderCell("Northing", boldFont, 1, 1));
@@ -3136,41 +3243,45 @@ namespace GeoTableReports
 
                         // DATA row 2 cells - no inside borders, only bottom border to complete the header
                         table.AddHeaderCell(new iText.Layout.Element.Cell()
-                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(8))
+                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(6.5f))
                             .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
                             .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                             .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                             .SetBorderTop(iText.Layout.Borders.Border.NO_BORDER)
-                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 1))
-                            .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 1))
-                            .SetBorderRight(iText.Layout.Borders.Border.NO_BORDER));
+                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                            .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                            .SetBorderRight(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetPadding(1));
                         table.AddHeaderCell(new iText.Layout.Element.Cell()
-                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(8))
+                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(6.5f))
                             .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
                             .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                             .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                             .SetBorderTop(iText.Layout.Borders.Border.NO_BORDER)
-                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 1))
+                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
                             .SetBorderLeft(iText.Layout.Borders.Border.NO_BORDER)
-                            .SetBorderRight(iText.Layout.Borders.Border.NO_BORDER));
+                            .SetBorderRight(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetPadding(1));
                         table.AddHeaderCell(new iText.Layout.Element.Cell()
-                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(8))
+                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(6.5f))
                             .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
                             .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                             .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                             .SetBorderTop(iText.Layout.Borders.Border.NO_BORDER)
-                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 1))
+                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
                             .SetBorderLeft(iText.Layout.Borders.Border.NO_BORDER)
-                            .SetBorderRight(iText.Layout.Borders.Border.NO_BORDER));
+                            .SetBorderRight(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetPadding(1));
                         table.AddHeaderCell(new iText.Layout.Element.Cell()
-                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(8))
+                            .Add(new Paragraph("").SetFont(boldFont).SetFontSize(6.5f))
                             .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
                             .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                             .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                             .SetBorderTop(iText.Layout.Borders.Border.NO_BORDER)
-                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 1))
+                            .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
                             .SetBorderLeft(iText.Layout.Borders.Border.NO_BORDER)
-                            .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 1)));
+                            .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                            .SetPadding(1));
 
                         // Process alignment entities
                         int curveNumber = 0;
@@ -3219,30 +3330,33 @@ namespace GeoTableReports
         private iText.Layout.Element.Cell CreateHeaderCell(string text, PdfFont font, int rowspan, int colspan)
         {
             return new iText.Layout.Element.Cell(rowspan, colspan)
-                .Add(new Paragraph(text).SetFont(font).SetFontSize(8))
+                .Add(new Paragraph(text).SetFont(font).SetFontSize(6.5f))
                 .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
-                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1));
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetPadding(1);
         }
 
         private iText.Layout.Element.Cell CreateDataCell(string text, PdfFont font)
         {
             return new iText.Layout.Element.Cell()
-                .Add(new Paragraph(text).SetFont(font).SetFontSize(8))
+                .Add(new Paragraph(text).SetFont(font).SetFontSize(6.5f))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
-                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1));
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetPadding(1);
         }
 
         private iText.Layout.Element.Cell CreateDataCellNoBorder(string text, PdfFont font)
         {
             return new iText.Layout.Element.Cell()
-                .Add(new Paragraph(text).SetFont(font).SetFontSize(8))
+                .Add(new Paragraph(text).SetFont(font).SetFontSize(6.5f))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                 .SetBackgroundColor(ColorConstants.WHITE)
-                .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                .SetPadding(1);
         }
 
         private void AddGeoTableTangentPdf(iText.Layout.Element.Table table, AlignmentLine line, CivDb.Alignment alignment, int index, PdfFont font)
