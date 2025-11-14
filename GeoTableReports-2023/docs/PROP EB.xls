@@ -1,0 +1,370 @@
+<html xmlns:fo="http://www.w3.org/1999/XSL/Format" xmlns:msxsl="urn:schemas-microsoft-com:xslt" xmlns:inr="http://mycompany.com/mynamespace"> 
+<head> 
+<META http-equiv="Content-Type" content="text/html; charset=iso-8859-1"> 
+<link rel="stylesheet" type="text/css" href="\\lexw00\caddlib\Mstn\Workspace\Dept\Track\inroads_ss2_xsl\/_Themes/engineer/theme_V2.css"> 
+<title lang="en">Setting Out Table</title> 
+</head> 
+<body> 
+<p lang="en"><u>TRACK GEOMETRY DATA -  Prop EB</u></p> 
+<table border="1" cellpadding="2" cellspacing="0" width="100%"> 
+<thead> 
+<tr> 
+<th rowspan="2" valign="middle">ELEMENT</th> 
+<th rowspan="2" valign="middle">CURVE No.</th> 
+<th rowspan="2" valign="middle">POINT</th> 
+<th rowspan="2" valign="middle">STATION</th> 
+<th rowspan="2" valign="middle">BEARING<br></th> 
+<th colspan="2" valign="middle">COORDINATES</th> 
+<th rowspan="2" colspan="4" valign="middle">DATA</th> 
+</tr> 
+<tr> 
+<th style="font-size: 72%" valign="middle">Northing</th> 
+<th style="font-size: 72%" valign="middle">Easting</th> 
+</tr> 
+</thead> 
+<tbody> 
+<tr style="font-size: 72%"> 
+<td style="border-bottom: none"> </td> 
+<td rowspan="3"> </td> 
+<td class="sidepad" align="center">PC</td> 
+<td class="sidepad" align="center">220+60.84</td> 
+<td rowspan="3"> </td> 
+<td class="sidepad" align="center">2944239.3703</td> 
+<td align="center" class="sidepad">746506.2664</td> 
+<td class="sidepad" align="center" style="border-bottom: none; border-right: none ">c =  
+                2°29'34.08"</td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none; border-right: none">Dc= 
+                3°06'42.58"</td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-right: none;border-left: none">R= 
+                1841.23' 
+            </td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none">Lc= 
+                80.11' 
+            </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td style="border-top: none;border-bottom: none" align="center">CURVE</td> 
+<td class="sidepad" align="center">PI</td> 
+<td> </td> 
+<td class="sidepad" align="center">2944241.4099</td> 
+<td class="sidepad" align="center">746270.8692</td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td style="border-top: none"> </td> 
+<td class="sidepad" align="center">PCC</td> 
+<td align="center" class="sidepad">221+40.95</td> 
+<td align="center" class="sidepad">2944241.8064</td> 
+<td align="center" class="sidepad">746426.2025</td> 
+<td class="sidepad" align="center" style="border-top: none ; border-right: none; border-right: none">Tc= 
+                40.06' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ; border-left: none; border-right: none">Ec= 
+                0.44' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ; border-right: none; border-left: none">CC:N 
+                2946080.5272</td> 
+<td class="sidepad" align="center" style="border-top: none ; border-left: none">E 
+                746522.2190</td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td style="border-bottom: none"> </td> 
+<td rowspan="3"> </td> 
+<td class="sidepad" align="center">PCC</td> 
+<td class="sidepad" align="center">221+40.95</td> 
+<td rowspan="3"> </td> 
+<td class="sidepad" align="center">2944241.8064</td> 
+<td align="center" class="sidepad">746426.2025</td> 
+<td class="sidepad" align="center" style="border-bottom: none; border-right: none ">c =  
+                6°24'55.92"</td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none; border-right: none">Dc= 
+                3°06'42.58"</td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-right: none;border-left: none">R= 
+                1841.23' 
+            </td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none">Lc= 
+                206.17' 
+            </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td style="border-top: none;border-bottom: none" align="center">CURVE</td> 
+<td class="sidepad" align="center">PI</td> 
+<td> </td> 
+<td class="sidepad" align="center">2944241.4099</td> 
+<td class="sidepad" align="center">746270.8692</td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td style="border-top: none"> </td> 
+<td class="sidepad" align="center">CS</td> 
+<td align="center" class="sidepad">223+47.12</td> 
+<td align="center" class="sidepad">2944264.0498</td> 
+<td align="center" class="sidepad">746221.3482</td> 
+<td class="sidepad" align="center" style="border-top: none ; border-right: none; border-right: none">Tc= 
+                103.19' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ; border-left: none; border-right: none">Ec= 
+                2.89' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ; border-right: none; border-left: none">CC:N 
+                2946080.5272</td> 
+<td class="sidepad" align="center" style="border-top: none ; border-left: none">E 
+                746522.2190</td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td rowspan="2" valign="middle" align="center">SPIRAL</td> 
+<td rowspan="2"> </td> 
+<td> </td> 
+<td> </td> 
+<td rowspan="2"> </td> 
+<td> </td> 
+<td> </td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-right: none">s = 
+                5°03'24.19"</td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none; border-right: none">Ls= 
+                325.00' 
+            </td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none; border-right: none">LT= 
+                216.76' 
+            </td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none">STs= 
+                108.41' 
+            </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td class="sidepad" align="center">ST</td> 
+<td class="sidepad" align="center" nowrap>226+72.12</td> 
+<td class="sidepad" align="center">2944335.8955</td> 
+<td class="sidepad" align="center">745904.5043</td> 
+<td class="sidepad" align="center" style="border-top: none ;border-bottom: none ;border-right: none">Xs= 
+                324.75' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ;border-bottom: none ;border-left: none; border-right: none">Ys= 
+                9.56' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ;border-bottom: none ;border-left: none; border-right: none">P= 
+                2.39' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ;border-bottom: none ;border-left: none">K= 
+                162.46' 
+            </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td class="sidepad" align="center">TANGENT</td> 
+<td> </td> 
+<td class="sidepad" align="center">PI</td> 
+<td class="sidepad" align="center">226+72.12</td> 
+<td class="sidepad" align="center" nowrap>N 75°32'18.69" W</td> 
+<td class="sidepad" align="center">2944335.8955</td> 
+<td class="sidepad" align="center">745904.5043</td> 
+<td colspan="4"> </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td class="sidepad" align="center">TANGENT</td> 
+<td> </td> 
+<td class="sidepad" align="center">PI</td> 
+<td class="sidepad" align="center">227+62.12</td> 
+<td class="sidepad" align="center" nowrap>N 75°32'18.69" W</td> 
+<td class="sidepad" align="center">2944358.3711</td> 
+<td class="sidepad" align="center">745817.3558</td> 
+<td colspan="4"> </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td class="sidepad" align="center">TANGENT</td> 
+<td> </td> 
+<td class="sidepad" align="center">PI</td> 
+<td class="sidepad" align="center">227+93.53</td> 
+<td class="sidepad" align="center" nowrap>N 75°32'18.69" W</td> 
+<td class="sidepad" align="center">2944366.2168</td> 
+<td class="sidepad" align="center">745786.9346</td> 
+<td colspan="4"> </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td class="sidepad" align="center">TANGENT</td> 
+<td> </td> 
+<td class="sidepad" align="center">PI</td> 
+<td class="sidepad" align="center">231+58.72</td> 
+<td class="sidepad" align="center" nowrap>N 75°32'18.69" W</td> 
+<td class="sidepad" align="center">2944457.4154</td> 
+<td class="sidepad" align="center">745433.3151</td> 
+<td colspan="4"> </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td class="sidepad" align="center">TANGENT</td> 
+<td> </td> 
+<td class="sidepad" align="center">PI</td> 
+<td class="sidepad" align="center">268+68.43</td> 
+<td class="sidepad" align="center" nowrap>N 75°32'18.69" W</td> 
+<td class="sidepad" align="center">2945383.8358</td> 
+<td class="sidepad" align="center">741841.1506</td> 
+<td colspan="4"> </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td class="sidepad" align="center">TANGENT</td> 
+<td> </td> 
+<td class="sidepad" align="center">PI</td> 
+<td class="sidepad" align="center">270+61.29</td> 
+<td class="sidepad" align="center" nowrap>N 75°32'18.69" W</td> 
+<td class="sidepad" align="center">2945431.9988</td> 
+<td class="sidepad" align="center">741654.4001</td> 
+<td colspan="4"> </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td class="sidepad" align="center">TANGENT</td> 
+<td> </td> 
+<td class="sidepad" align="center">PI</td> 
+<td class="sidepad" align="center">270+92.71</td> 
+<td class="sidepad" align="center" nowrap>N 75°32'18.69" W</td> 
+<td class="sidepad" align="center">2945439.8445</td> 
+<td class="sidepad" align="center">741623.9788</td> 
+<td colspan="4"> </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td rowspan="2" valign="middle" align="center">SPIRAL</td> 
+<td rowspan="2"> </td> 
+<td class="sidepad" align="center">TS</td> 
+<td class="sidepad" align="center" nowrap>271+82.71</td> 
+<td rowspan="2"> </td> 
+<td class="sidepad" align="center">2945462.3201</td> 
+<td class="sidepad" align="center">741536.8304</td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-right: none">s = 
+                1°56'02.01"</td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none; border-right: none">Ls= 
+                200.00' 
+            </td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none; border-right: none">LT= 
+                133.34' 
+            </td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none">STs= 
+                66.67' 
+            </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td class="sidepad" align="center" style="border-top: none ;border-bottom: none ;border-right: none">Xs= 
+                199.98' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ;border-bottom: none ;border-left: none; border-right: none">Ys= 
+                2.25' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ;border-bottom: none ;border-left: none; border-right: none">P= 
+                0.56' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ;border-bottom: none ;border-left: none">K= 
+                100.00' 
+            </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td style="border-bottom: none"> </td> 
+<td rowspan="3"> </td> 
+<td class="sidepad" align="center">SC</td> 
+<td class="sidepad" align="center">273+82.71</td> 
+<td rowspan="3"> </td> 
+<td class="sidepad" align="center">2945510.0815</td> 
+<td align="center" class="sidepad">741342.6274</td> 
+<td class="sidepad" align="center" style="border-bottom: none; border-right: none ">c =  
+                0°34'45.87"</td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none; border-right: none">Dc= 
+                1°56'02.01"</td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-right: none;border-left: none">R= 
+                2962.72' 
+            </td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none">Lc= 
+                29.96' 
+            </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td style="border-top: none;border-bottom: none" align="center">CURVE</td> 
+<td class="sidepad" align="center">PI</td> 
+<td> </td> 
+<td class="sidepad" align="center">2945529.8506</td> 
+<td class="sidepad" align="center">741274.9831</td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td style="border-top: none"> </td> 
+<td class="sidepad" align="center">PCC</td> 
+<td align="center" class="sidepad">274+12.67</td> 
+<td align="center" class="sidepad">2945516.4323</td> 
+<td align="center" class="sidepad">741313.3476</td> 
+<td class="sidepad" align="center" style="border-top: none ; border-right: none; border-right: none">Tc= 
+                14.98' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ; border-left: none; border-right: none">Ec= 
+                0.04' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ; border-right: none; border-left: none">CC:N 
+                2942617.8991</td> 
+<td class="sidepad" align="center" style="border-top: none ; border-left: none">E 
+                740699.9851</td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td style="border-bottom: none"> </td> 
+<td rowspan="3"> </td> 
+<td class="sidepad" align="center">PCC</td> 
+<td class="sidepad" align="center">274+12.67</td> 
+<td rowspan="3"> </td> 
+<td class="sidepad" align="center">2945516.4323</td> 
+<td align="center" class="sidepad">741313.3476</td> 
+<td class="sidepad" align="center" style="border-bottom: none; border-right: none ">c =  
+                4°15'13.03"</td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none; border-right: none">Dc= 
+                1°56'02.01"</td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-right: none;border-left: none">R= 
+                2962.72' 
+            </td> 
+<td class="sidepad" align="center" style="border-bottom: none ;border-left: none">Lc= 
+                219.95' 
+            </td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td style="border-top: none;border-bottom: none" align="center">CURVE</td> 
+<td class="sidepad" align="center">PI</td> 
+<td> </td> 
+<td class="sidepad" align="center">2945529.8506</td> 
+<td class="sidepad" align="center">741274.9831</td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td style="border-top: none"> </td> 
+<td class="sidepad" align="center">PT</td> 
+<td align="center" class="sidepad">276+32.62</td> 
+<td align="center" class="sidepad">2945553.9423</td> 
+<td align="center" class="sidepad">741096.6696</td> 
+<td class="sidepad" align="center" style="border-top: none ; border-right: none; border-right: none">Tc= 
+                110.03' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ; border-left: none; border-right: none">Ec= 
+                2.04' 
+            </td> 
+<td class="sidepad" align="center" style="border-top: none ; border-right: none; border-left: none">CC:N 
+                2942617.8991</td> 
+<td class="sidepad" align="center" style="border-top: none ; border-left: none">E 
+                740699.9851</td> 
+</tr> 
+<tr style="font-size: 72%"> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td class="sidepad" align="center">PT</td> 
+<td class="sidepad" align="center" nowrap>276+32.62</td> 
+<td class="sidepad" align="center">2945553.9423</td> 
+<td class="sidepad" align="center">741096.6696</td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+<td> </td> 
+</tr> 
+</tbody> 
+</table> 
+</body> 
+</html> 
