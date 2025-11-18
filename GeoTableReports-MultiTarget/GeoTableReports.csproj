@@ -1,0 +1,200 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Multi-Targeting: Build for Civil3D 2023, 2024, and 2025 -->
+  <PropertyGroup>
+    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <OutputType>Library</OutputType>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+
+    <!-- Set default Civil3D version if not specified -->
+    <Civil3DVersion Condition="'$(Civil3DVersion)' == '' AND '$(TargetFramework)' == 'net48'">2023</Civil3DVersion>
+    <Civil3DVersion Condition="'$(Civil3DVersion)' == '' AND '$(TargetFramework)' == 'net8.0-windows'">2025</Civil3DVersion>
+  </PropertyGroup>
+
+  <!-- Version-specific Assembly Names based on Civil3DVersion parameter -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net48' AND '$(Civil3DVersion)' == '2023'">
+    <AssemblyName>GeoTableReports.2023</AssemblyName>
+    <DefineConstants>CIVIL3D_2023</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net48' AND '$(Civil3DVersion)' == '2024'">
+    <AssemblyName>GeoTableReports.2024</AssemblyName>
+    <DefineConstants>CIVIL3D_2024</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <AssemblyName>GeoTableReports.2025</AssemblyName>
+    <DefineConstants>CIVIL3D_2025</DefineConstants>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <!-- Civil 3D Installation Path Detection -->
+  <PropertyGroup>
+    <Civil3DPath2023 Condition="Exists('C:\Program Files\Autodesk\AutoCAD 2023\')">C:\Program Files\Autodesk\AutoCAD 2023\</Civil3DPath2023>
+    <Civil3DPath2024 Condition="Exists('C:\Program Files\Autodesk\AutoCAD 2024\')">C:\Program Files\Autodesk\AutoCAD 2024\</Civil3DPath2024>
+    <Civil3DPath2025 Condition="Exists('C:\Program Files\Autodesk\AutoCAD 2025\')">C:\Program Files\Autodesk\AutoCAD 2025\</Civil3DPath2025>
+  </PropertyGroup>
+
+  <!-- System References for .NET Framework 4.8 -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+  <!-- Civil 3D API References for 2023 (net48) -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48' AND '$(Civil3DPath2023)' != ''">
+    <Reference Include="AcCoreMgd">
+      <HintPath>$(Civil3DPath2023)AcCoreMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AcDbMgd">
+      <HintPath>$(Civil3DPath2023)AcDbMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AcMgd">
+      <HintPath>$(Civil3DPath2023)AcMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AecBaseMgd">
+      <HintPath>$(Civil3DPath2023)ACA\AecBaseMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AeccDbMgd">
+      <HintPath>$(Civil3DPath2023)C3D\AeccDbMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AeccPressurePipesMgd">
+      <HintPath>$(Civil3DPath2023)C3D\AeccPressurePipesMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Civil 3D API References for 2024 (net48) -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48' AND '$(Civil3DPath2024)' != ''">
+    <Reference Include="AcCoreMgd">
+      <HintPath>$(Civil3DPath2024)AcCoreMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AcDbMgd">
+      <HintPath>$(Civil3DPath2024)AcDbMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AcMgd">
+      <HintPath>$(Civil3DPath2024)AcMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AecBaseMgd">
+      <HintPath>$(Civil3DPath2024)ACA\AecBaseMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AeccDbMgd">
+      <HintPath>$(Civil3DPath2024)C3D\AeccDbMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AeccPressurePipesMgd">
+      <HintPath>$(Civil3DPath2024)C3D\AeccPressurePipesMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Civil 3D API References for 2025 (net8.0-windows) -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows' AND '$(Civil3DPath2025)' != ''">
+    <Reference Include="AcCoreMgd">
+      <HintPath>$(Civil3DPath2025)AcCoreMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AcDbMgd">
+      <HintPath>$(Civil3DPath2025)AcDbMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AcMgd">
+      <HintPath>$(Civil3DPath2025)AcMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AecBaseMgd">
+      <HintPath>$(Civil3DPath2025)ACA\AecBaseMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AeccDbMgd">
+      <HintPath>$(Civil3DPath2025)C3D\AeccDbMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AeccPressurePipesMgd">
+      <HintPath>$(Civil3DPath2025)C3D\AeccPressurePipesMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- NuGet Packages for PDF and Excel Generation -->
+  <ItemGroup>
+    <PackageReference Include="itext7" Version="8.0.5" />
+    <PackageReference Include="itext7.bouncy-castle-adapter" Version="8.0.5" />
+    <PackageReference Include="EPPlus" Version="7.5.2" />
+    <PackageReference Include="NETStandard.Library" Version="2.0.3" />
+  </ItemGroup>
+
+  <!-- Post-Build: Copy to Civil 3D 2023 Plugins -->
+  <Target Name="PostBuild2023" AfterTargets="PostBuildEvent" Condition="'$(TargetFramework)' == 'net48' AND '$(Civil3DPath2023)' != ''">
+    <Message Text="Copying GeoTableReports.2023.dll and dependencies to Civil 3D 2023 plugins folder..." Importance="high" />
+    <MakeDir Directories="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2023" />
+
+    <!-- Copy main DLL -->
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2023" />
+
+    <!-- Copy all dependencies -->
+    <ItemGroup>
+      <DependencyFiles Include="$(OutDir)*.dll" Exclude="$(TargetPath)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DependencyFiles)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2023" SkipUnchangedFiles="true" />
+
+    <!-- Copy PackageContents.xml for 2023 -->
+    <Copy SourceFiles="$(ProjectDir)PackageContents.2023.xml" DestinationFiles="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\PackageContents.xml" Condition="Exists('$(ProjectDir)PackageContents.2023.xml')" />
+  </Target>
+
+  <!-- Post-Build: Copy to Civil 3D 2024 Plugins -->
+  <Target Name="PostBuild2024" AfterTargets="PostBuildEvent" Condition="'$(TargetFramework)' == 'net48' AND '$(Civil3DPath2024)' != ''">
+    <Message Text="Copying GeoTableReports.2024.dll and dependencies to Civil 3D 2024 plugins folder..." Importance="high" />
+    <MakeDir Directories="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2024" />
+
+    <!-- Copy main DLL -->
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2024" />
+
+    <!-- Copy all dependencies -->
+    <ItemGroup>
+      <DependencyFiles Include="$(OutDir)*.dll" Exclude="$(TargetPath)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DependencyFiles)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2024" SkipUnchangedFiles="true" />
+
+    <!-- Copy PackageContents.xml for 2024 -->
+    <Copy SourceFiles="$(ProjectDir)PackageContents.2024.xml" DestinationFiles="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\PackageContents.xml" Condition="Exists('$(ProjectDir)PackageContents.2024.xml')" />
+  </Target>
+
+  <!-- Post-Build: Copy to Civil 3D 2025 Plugins -->
+  <Target Name="PostBuild2025" AfterTargets="PostBuildEvent" Condition="'$(TargetFramework)' == 'net8.0-windows' AND '$(Civil3DPath2025)' != ''">
+    <Message Text="Copying GeoTableReports.2025.dll and dependencies to Civil 3D 2025 plugins folder..." Importance="high" />
+    <MakeDir Directories="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2025" />
+
+    <!-- Copy main DLL -->
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2025" />
+
+    <!-- Copy all dependencies -->
+    <ItemGroup>
+      <DependencyFiles Include="$(OutDir)*.dll" Exclude="$(TargetPath)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DependencyFiles)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\2025" SkipUnchangedFiles="true" />
+
+    <!-- Copy PackageContents.xml for 2025 -->
+    <Copy SourceFiles="$(ProjectDir)PackageContents.2025.xml" DestinationFiles="$(AppData)\Autodesk\ApplicationPlugins\GeoTableReports.bundle\PackageContents.xml" Condition="Exists('$(ProjectDir)PackageContents.2025.xml')" />
+  </Target>
+
+</Project>
