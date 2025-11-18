@@ -2157,19 +2157,19 @@ namespace GeoTableReports
         /// </summary>
         private void CalculateCurveCenter(AlignmentArc arc, CivDb.Alignment alignment, out double centerNorthing, out double centerEasting)
         {
-            // Get midpoint of arc
-            double midStation = (arc.StartStation + arc.EndStation) / 2.0;
-            double x = 0, y = 0, z = 0;
-            alignment.PointLocation(midStation, 0, 0, ref x, ref y, ref z);
+            // Get PC (Point of Curvature) coordinates
+            double x1 = 0, y1 = 0, z1 = 0;
+            alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
 
-            // Calculate perpendicular direction to curve (toward center)
-            double midDirection = (arc.StartDirection + arc.EndDirection) / 2.0;
-            double perpDirection = arc.Clockwise ? midDirection - Math.PI / 2.0 : midDirection + Math.PI / 2.0;
+            // Calculate perpendicular direction from PC to center
+            // For a right curve (clockwise), the center is to the right (90° CW from tangent)
+            // For a left curve (counter-clockwise), the center is to the left (90° CCW from tangent)
+            double perpDirection = arc.Clockwise ? arc.StartDirection - Math.PI / 2.0 : arc.StartDirection + Math.PI / 2.0;
 
-            // Offset by radius to get center
+            // Offset by radius from PC to get center
             double radius = Math.Abs(arc.Radius);
-            centerEasting = x + radius * Math.Cos(perpDirection);
-            centerNorthing = y + radius * Math.Sin(perpDirection);
+            centerEasting = x1 + radius * Math.Cos(perpDirection);
+            centerNorthing = y1 + radius * Math.Sin(perpDirection);
         }
 
         /// <summary>
@@ -2757,10 +2757,41 @@ namespace GeoTableReports
                     int lastDataRow = row;
                     int curveNumber = 0;
 
-                    // Process alignment entities
+                    // Collect and sort alignment entities by station
+                    var sortedEntities = new System.Collections.Generic.List<AlignmentEntity>();
                     for (int i = 0; i < alignment.Entities.Count; i++)
                     {
-                        AlignmentEntity entity = alignment.Entities[i];
+                        if (alignment.Entities[i] != null)
+                            sortedEntities.Add(alignment.Entities[i]);
+                    }
+
+                    // Sort by start station
+                    sortedEntities.Sort((a, b) =>
+                    {
+                        double stationA = 0;
+                        double stationB = 0;
+
+                        if (a.EntityType == AlignmentEntityType.Line)
+                            stationA = (a as AlignmentLine).StartStation;
+                        else if (a.EntityType == AlignmentEntityType.Arc)
+                            stationA = (a as AlignmentArc).StartStation;
+                        else if (a.EntityType == AlignmentEntityType.Spiral)
+                            stationA = (a as AlignmentSpiral).StartStation;
+
+                        if (b.EntityType == AlignmentEntityType.Line)
+                            stationB = (b as AlignmentLine).StartStation;
+                        else if (b.EntityType == AlignmentEntityType.Arc)
+                            stationB = (b as AlignmentArc).StartStation;
+                        else if (b.EntityType == AlignmentEntityType.Spiral)
+                            stationB = (b as AlignmentSpiral).StartStation;
+
+                        return stationA.CompareTo(stationB);
+                    });
+
+                    // Process alignment entities in sorted order
+                    for (int i = 0; i < sortedEntities.Count; i++)
+                    {
+                        AlignmentEntity entity = sortedEntities[i];
                         if (entity == null) continue;
 
                         try
@@ -2928,20 +2959,25 @@ namespace GeoTableReports
                 // Get coordinates
                 double x1 = 0, y1 = 0, z1 = 0;
                 double x2 = 0, y2 = 0, z2 = 0;
-                double xPI = 0, yPI = 0, zPI = 0;
                 alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
                 alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
 
-                // Calculate PI location (approximate - midpoint elevated)
-                double midStation = (arc.StartStation + arc.EndStation) / 2.0;
-                alignment.PointLocation(midStation, 0, 0, ref xPI, ref yPI, ref zPI);
-
-                string directionStr = arc.Clockwise ? "R" : "L";
+                // Calculate curve parameters
                 double radius = Math.Abs(arc.Radius);
                 double delta = Math.Abs(arc.Delta);
-                string deltaAngle = FormatAngleDMS(delta);
                 double tc = CalculateTangentDistance(radius, delta);
                 double ec = CalculateExternalDistance(radius, delta);
+                string directionStr = arc.Clockwise ? "R" : "L";
+                string deltaAngle = FormatAngleDMS(delta);
+
+                // Calculate PI location using tangent intersection
+                // PI is located at tangent distance from PC along back tangent
+                double backTangentDir = arc.StartDirection + Math.PI;
+
+                // Calculate PI coordinates from PC
+                double xPI = x1 + tc * Math.Cos(backTangentDir);
+                double yPI = y1 + tc * Math.Sin(backTangentDir);
+                double zPI = 0;
 
                 // Calculate curve center
                 CalculateCurveCenter(arc, alignment, out double centerN, out double centerE);
@@ -3283,11 +3319,42 @@ namespace GeoTableReports
                             .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f))
                             .SetPadding(1));
 
-                        // Process alignment entities
-                        int curveNumber = 0;
+                        // Collect and sort alignment entities by station
+                        var sortedEntities = new System.Collections.Generic.List<AlignmentEntity>();
                         for (int i = 0; i < alignment.Entities.Count; i++)
                         {
-                            AlignmentEntity entity = alignment.Entities[i];
+                            if (alignment.Entities[i] != null)
+                                sortedEntities.Add(alignment.Entities[i]);
+                        }
+
+                        // Sort by start station
+                        sortedEntities.Sort((a, b) =>
+                        {
+                            double stationA = 0;
+                            double stationB = 0;
+
+                            if (a.EntityType == AlignmentEntityType.Line)
+                                stationA = (a as AlignmentLine).StartStation;
+                            else if (a.EntityType == AlignmentEntityType.Arc)
+                                stationA = (a as AlignmentArc).StartStation;
+                            else if (a.EntityType == AlignmentEntityType.Spiral)
+                                stationA = (a as AlignmentSpiral).StartStation;
+
+                            if (b.EntityType == AlignmentEntityType.Line)
+                                stationB = (b as AlignmentLine).StartStation;
+                            else if (b.EntityType == AlignmentEntityType.Arc)
+                                stationB = (b as AlignmentArc).StartStation;
+                            else if (b.EntityType == AlignmentEntityType.Spiral)
+                                stationB = (b as AlignmentSpiral).StartStation;
+
+                            return stationA.CompareTo(stationB);
+                        });
+
+                        // Process alignment entities in sorted order
+                        int curveNumber = 0;
+                        for (int i = 0; i < sortedEntities.Count; i++)
+                        {
+                            AlignmentEntity entity = sortedEntities[i];
                             if (entity == null) continue;
 
                             try
@@ -3405,10 +3472,12 @@ namespace GeoTableReports
             // Calculate curve center
             CalculateCurveCenter(arc, alignment, out double centerN, out double centerE);
 
-            // Calculate PI location (approximate - midpoint elevated)
-            double midStation = (arc.StartStation + arc.EndStation) / 2.0;
-            double xPI = 0, yPI = 0, zPI = 0;
-            alignment.PointLocation(midStation, 0, 0, ref xPI, ref yPI, ref zPI);
+            // Calculate PI location using tangent intersection
+            // PI is located at tangent distance from PC along back tangent
+            double backTangentDir = arc.StartDirection + Math.PI;
+            double xPI = x1 + tc * Math.Cos(backTangentDir);
+            double yPI = y1 + tc * Math.Sin(backTangentDir);
+            double zPI = 0;
 
             string curveDir = arc.Clockwise ? "R" : "L";
             string curveLabel = $"{curveNumber}-{curveDir}";

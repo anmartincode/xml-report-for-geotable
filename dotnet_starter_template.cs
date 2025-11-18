@@ -950,18 +950,50 @@ namespace GeoTableReports
                 double x1 = 0, y1 = 0, z1 = 0;
                 double x2 = 0, y2 = 0, z2 = 0;
                 double xc = 0, yc = 0, zc = 0;
-                double xMid = 0, yMid = 0, zMid = 0;
 
                 alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
                 alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
-                alignment.PointLocation((arc.StartStation + arc.EndStation) / 2, 0, 0, ref xMid, ref yMid, ref zMid);
+
+                // Get PI station and coordinates from arc properties
+                double piStation = arc.PIStation;
+                double xPI = 0, yPI = 0;
+
+                // Try to get PI coordinates from sub-entities
+                bool gotFromSubEntity = false;
+                try
+                {
+                    if (arc.SubEntityCount > 0)
+                    {
+                        var subEntity = arc[0];
+                        if (subEntity is AlignmentSubEntityArc)
+                        {
+                            var subEntityArc = subEntity as AlignmentSubEntityArc;
+                            var piPoint = subEntityArc.PIPoint;
+                            xPI = piPoint.X;  // Easting
+                            yPI = piPoint.Y;  // Northing
+                            gotFromSubEntity = true;
+                        }
+                    }
+                }
+                catch { }
+
+                // Calculate deltaRadians for use in calculations
+                double deltaRadians = arc.Delta;
+
+                // Fallback: calculate if sub-entity access failed
+                if (!gotFromSubEntity)
+                {
+                    double tangent = arc.Radius * Math.Tan(Math.Abs(deltaRadians) / 2);
+                    double backTangentDir = arc.StartDirection + Math.PI;
+                    xPI = x1 + tangent * Math.Cos(backTangentDir);
+                    yPI = y1 + tangent * Math.Sin(backTangentDir);
+                }
 
                 // Calculate center point
                 double midStation = (arc.StartStation + arc.EndStation) / 2;
                 double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
                 alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
 
-                double deltaRadians = arc.Delta;
                 double deltaDegrees = deltaRadians * (180.0 / Math.PI);
                 double chord = 2 * arc.Radius * Math.Sin(Math.Abs(deltaRadians) / 2);
                 double middleOrdinate = arc.Radius * (1 - Math.Cos(Math.Abs(deltaRadians) / 2));
@@ -970,7 +1002,7 @@ namespace GeoTableReports
 
                 writer.WriteLine("Element: Circular");
                 writer.WriteLine($" SC  ( ) {FormatStation(arc.StartStation),15} {y1,15:F4} {x1,15:F4}");
-                writer.WriteLine($" PI  ( ) {FormatStation(midStation),15} {yMid,15:F4} {xMid,15:F4}");
+                writer.WriteLine($" PI  ( ) {FormatStation(piStation),15} {yPI,15:F4} {xPI,15:F4}");
                 writer.WriteLine($" CC  ( ) {yc,32:F4} {xc,15:F4}");
                 writer.WriteLine($" CS  ( ) {FormatStation(arc.EndStation),15} {y2,15:F4} {x2,15:F4}");
                 writer.WriteLine($" Radius: {arc.Radius,15:F4}");
@@ -1642,18 +1674,50 @@ namespace GeoTableReports
                 double x1 = 0, y1 = 0, z1 = 0;
                 double x2 = 0, y2 = 0, z2 = 0;
                 double xc = 0, yc = 0, zc = 0;
-                double xMid = 0, yMid = 0, zMid = 0;
 
                 alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
                 alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
-                alignment.PointLocation((arc.StartStation + arc.EndStation) / 2, 0, 0, ref xMid, ref yMid, ref zMid);
+
+                // Get PI station and coordinates from arc properties
+                double piStation = arc.PIStation;
+                double xPI = 0, yPI = 0;
+
+                // Try to get PI coordinates from sub-entities
+                bool gotFromSubEntity = false;
+                try
+                {
+                    if (arc.SubEntityCount > 0)
+                    {
+                        var subEntity = arc[0];
+                        if (subEntity is AlignmentSubEntityArc)
+                        {
+                            var subEntityArc = subEntity as AlignmentSubEntityArc;
+                            var piPoint = subEntityArc.PIPoint;
+                            xPI = piPoint.X;  // Easting
+                            yPI = piPoint.Y;  // Northing
+                            gotFromSubEntity = true;
+                        }
+                    }
+                }
+                catch { }
+
+                // Calculate deltaRadians for use in calculations
+                double deltaRadians = arc.Delta;
+
+                // Fallback: calculate if sub-entity access failed
+                if (!gotFromSubEntity)
+                {
+                    double tangent = arc.Radius * Math.Tan(Math.Abs(deltaRadians) / 2);
+                    double backTangentDir = arc.StartDirection + Math.PI;
+                    xPI = x1 + tangent * Math.Cos(backTangentDir);
+                    yPI = y1 + tangent * Math.Sin(backTangentDir);
+                }
 
                 // Calculate center point
                 double midStation = (arc.StartStation + arc.EndStation) / 2;
                 double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
                 alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
 
-                double deltaRadians = arc.Delta;
                 double deltaDegrees = deltaRadians * (180.0 / Math.PI);
                 double chord = 2 * arc.Radius * Math.Sin(Math.Abs(deltaRadians) / 2);
                 double middleOrdinate = arc.Radius * (1 - Math.Cos(Math.Abs(deltaRadians) / 2));
@@ -1664,7 +1728,7 @@ namespace GeoTableReports
                 document.Add(new Paragraph("\n").SetFontSize(5));
 
                 AddHorizontalDataRow(document, "SC  ( ) ", FormatStation(arc.StartStation), y1, x1, normalFont);
-                AddHorizontalDataRow(document, "PI  ( ) ", FormatStation(midStation), yMid, xMid, normalFont);
+                AddHorizontalDataRow(document, "PI  ( ) ", FormatStation(piStation), yPI, xPI, normalFont);
                 AddHorizontalDataRow(document, "CC  ( ) ", "               ", yc, xc, normalFont);
                 AddHorizontalDataRow(document, "CS  ( ) ", FormatStation(arc.EndStation), y2, x2, normalFont);
 
@@ -2157,19 +2221,19 @@ namespace GeoTableReports
         /// </summary>
         private void CalculateCurveCenter(AlignmentArc arc, CivDb.Alignment alignment, out double centerNorthing, out double centerEasting)
         {
-            // Get midpoint of arc
-            double midStation = (arc.StartStation + arc.EndStation) / 2.0;
-            double x = 0, y = 0, z = 0;
-            alignment.PointLocation(midStation, 0, 0, ref x, ref y, ref z);
+            // Get PC (Point of Curvature) coordinates
+            double x1 = 0, y1 = 0, z1 = 0;
+            alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
 
-            // Calculate perpendicular direction to curve (toward center)
-            double midDirection = (arc.StartDirection + arc.EndDirection) / 2.0;
-            double perpDirection = arc.Clockwise ? midDirection - Math.PI / 2.0 : midDirection + Math.PI / 2.0;
+            // Calculate perpendicular direction from PC to center
+            // For a right curve (clockwise), the center is to the right (90° CW from tangent)
+            // For a left curve (counter-clockwise), the center is to the left (90° CCW from tangent)
+            double perpDirection = arc.Clockwise ? arc.StartDirection - Math.PI / 2.0 : arc.StartDirection + Math.PI / 2.0;
 
-            // Offset by radius to get center
+            // Offset by radius from PC to get center
             double radius = Math.Abs(arc.Radius);
-            centerEasting = x + radius * Math.Cos(perpDirection);
-            centerNorthing = y + radius * Math.Sin(perpDirection);
+            centerEasting = x1 + radius * Math.Cos(perpDirection);
+            centerNorthing = y1 + radius * Math.Sin(perpDirection);
         }
 
         /// <summary>
@@ -2757,10 +2821,41 @@ namespace GeoTableReports
                     int lastDataRow = row;
                     int curveNumber = 0;
 
-                    // Process alignment entities
+                    // Collect and sort alignment entities by station
+                    var sortedEntities = new System.Collections.Generic.List<AlignmentEntity>();
                     for (int i = 0; i < alignment.Entities.Count; i++)
                     {
-                        AlignmentEntity entity = alignment.Entities[i];
+                        if (alignment.Entities[i] != null)
+                            sortedEntities.Add(alignment.Entities[i]);
+                    }
+
+                    // Sort by start station
+                    sortedEntities.Sort((a, b) =>
+                    {
+                        double stationA = 0;
+                        double stationB = 0;
+
+                        if (a.EntityType == AlignmentEntityType.Line)
+                            stationA = (a as AlignmentLine).StartStation;
+                        else if (a.EntityType == AlignmentEntityType.Arc)
+                            stationA = (a as AlignmentArc).StartStation;
+                        else if (a.EntityType == AlignmentEntityType.Spiral)
+                            stationA = (a as AlignmentSpiral).StartStation;
+
+                        if (b.EntityType == AlignmentEntityType.Line)
+                            stationB = (b as AlignmentLine).StartStation;
+                        else if (b.EntityType == AlignmentEntityType.Arc)
+                            stationB = (b as AlignmentArc).StartStation;
+                        else if (b.EntityType == AlignmentEntityType.Spiral)
+                            stationB = (b as AlignmentSpiral).StartStation;
+
+                        return stationA.CompareTo(stationB);
+                    });
+
+                    // Process alignment entities in sorted order
+                    for (int i = 0; i < sortedEntities.Count; i++)
+                    {
+                        AlignmentEntity entity = sortedEntities[i];
                         if (entity == null) continue;
 
                         try
@@ -2928,20 +3023,49 @@ namespace GeoTableReports
                 // Get coordinates
                 double x1 = 0, y1 = 0, z1 = 0;
                 double x2 = 0, y2 = 0, z2 = 0;
-                double xPI = 0, yPI = 0, zPI = 0;
                 alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
                 alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
 
-                // Calculate PI location (approximate - midpoint elevated)
-                double midStation = (arc.StartStation + arc.EndStation) / 2.0;
-                alignment.PointLocation(midStation, 0, 0, ref xPI, ref yPI, ref zPI);
-
-                string directionStr = arc.Clockwise ? "R" : "L";
+                // Calculate curve parameters
                 double radius = Math.Abs(arc.Radius);
                 double delta = Math.Abs(arc.Delta);
-                string deltaAngle = FormatAngleDMS(delta);
                 double tc = CalculateTangentDistance(radius, delta);
                 double ec = CalculateExternalDistance(radius, delta);
+                string directionStr = arc.Clockwise ? "R" : "L";
+                string deltaAngle = FormatAngleDMS(delta);
+
+                // Get PI station and coordinates from arc properties
+                double piStation = arc.PIStation;
+                double xPI = 0, yPI = 0;
+
+                // Try to get PI coordinates from sub-entities
+                bool gotFromSubEntity = false;
+                try
+                {
+                    if (arc.SubEntityCount > 0)
+                    {
+                        var subEntity = arc[0];
+                        if (subEntity is AlignmentSubEntityArc)
+                        {
+                            var subEntityArc = subEntity as AlignmentSubEntityArc;
+                            var piPoint = subEntityArc.PIPoint;
+                            xPI = piPoint.X;  // Easting
+                            yPI = piPoint.Y;  // Northing
+                            gotFromSubEntity = true;
+                        }
+                    }
+                }
+                catch { }
+
+                // Fallback: calculate if sub-entity access failed
+                if (!gotFromSubEntity)
+                {
+                    // Calculate PI location using tangent intersection
+                    // PI is located at tangent distance from PC along back tangent
+                    double backTangentDir = arc.StartDirection + Math.PI;
+                    xPI = x1 + tc * Math.Cos(backTangentDir);
+                    yPI = y1 + tc * Math.Sin(backTangentDir);
+                }
 
                 // Calculate curve center
                 CalculateCurveCenter(arc, alignment, out double centerN, out double centerE);
@@ -2979,8 +3103,10 @@ namespace GeoTableReports
                 ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 2: PI - merge empty cells (columns 4-5)
+                // Row 2: PI - merge empty cells (columns 4-5), use PIStation for station
                 ws.Cells[row, 3].Value = "PI";
+                ws.Cells[row, 4].Value = FormatStation(piStation);
+                ws.Cells[row, 5].Value = "";
                 ws.Cells[row, 4, row, 5].Merge = true;
                 ws.Cells[row, 4].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 6].Value = yPI;
@@ -3283,11 +3409,42 @@ namespace GeoTableReports
                             .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f))
                             .SetPadding(1));
 
-                        // Process alignment entities
-                        int curveNumber = 0;
+                        // Collect and sort alignment entities by station
+                        var sortedEntities = new System.Collections.Generic.List<AlignmentEntity>();
                         for (int i = 0; i < alignment.Entities.Count; i++)
                         {
-                            AlignmentEntity entity = alignment.Entities[i];
+                            if (alignment.Entities[i] != null)
+                                sortedEntities.Add(alignment.Entities[i]);
+                        }
+
+                        // Sort by start station
+                        sortedEntities.Sort((a, b) =>
+                        {
+                            double stationA = 0;
+                            double stationB = 0;
+
+                            if (a.EntityType == AlignmentEntityType.Line)
+                                stationA = (a as AlignmentLine).StartStation;
+                            else if (a.EntityType == AlignmentEntityType.Arc)
+                                stationA = (a as AlignmentArc).StartStation;
+                            else if (a.EntityType == AlignmentEntityType.Spiral)
+                                stationA = (a as AlignmentSpiral).StartStation;
+
+                            if (b.EntityType == AlignmentEntityType.Line)
+                                stationB = (b as AlignmentLine).StartStation;
+                            else if (b.EntityType == AlignmentEntityType.Arc)
+                                stationB = (b as AlignmentArc).StartStation;
+                            else if (b.EntityType == AlignmentEntityType.Spiral)
+                                stationB = (b as AlignmentSpiral).StartStation;
+
+                            return stationA.CompareTo(stationB);
+                        });
+
+                        // Process alignment entities in sorted order
+                        int curveNumber = 0;
+                        for (int i = 0; i < sortedEntities.Count; i++)
+                        {
+                            AlignmentEntity entity = sortedEntities[i];
                             if (entity == null) continue;
 
                             try
@@ -3402,13 +3559,41 @@ namespace GeoTableReports
             alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
             alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
 
+            // Get PI station and coordinates from arc properties
+            double piStation = arc.PIStation;
+            double xPI = 0, yPI = 0;
+
+            // Try to get PI coordinates from sub-entities
+            bool gotFromSubEntity = false;
+            try
+            {
+                if (arc.SubEntityCount > 0)
+                {
+                    var subEntity = arc[0];
+                    if (subEntity is AlignmentSubEntityArc)
+                    {
+                        var subEntityArc = subEntity as AlignmentSubEntityArc;
+                        var piPoint = subEntityArc.PIPoint;
+                        xPI = piPoint.X;  // Easting
+                        yPI = piPoint.Y;  // Northing
+                        gotFromSubEntity = true;
+                    }
+                }
+            }
+            catch { }
+
+            // Fallback: calculate if sub-entity access failed
+            if (!gotFromSubEntity)
+            {
+                // Calculate PI location using tangent intersection
+                // PI is located at tangent distance from PC along back tangent
+                double backTangentDir = arc.StartDirection + Math.PI;
+                xPI = x1 + tc * Math.Cos(backTangentDir);
+                yPI = y1 + tc * Math.Sin(backTangentDir);
+            }
+
             // Calculate curve center
             CalculateCurveCenter(arc, alignment, out double centerN, out double centerE);
-
-            // Calculate PI location (approximate - midpoint elevated)
-            double midStation = (arc.StartStation + arc.EndStation) / 2.0;
-            double xPI = 0, yPI = 0, zPI = 0;
-            alignment.PointLocation(midStation, 0, 0, ref xPI, ref yPI, ref zPI);
 
             string curveDir = arc.Clockwise ? "R" : "L";
             string curveLabel = $"{curveNumber}-{curveDir}";
@@ -3440,9 +3625,9 @@ namespace GeoTableReports
                 .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
                 .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
 
-            // Row 2: PI
+            // Row 2: PI - use PIStation for station
             table.AddCell(CreateDataCell("PI", font));
-            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell(FormatStation(piStation), font));
             table.AddCell(CreateDataCell("", font));
             table.AddCell(CreateDataCell($"{yPI:F4}", font));
             table.AddCell(CreateDataCell($"{xPI:F4}", font));
