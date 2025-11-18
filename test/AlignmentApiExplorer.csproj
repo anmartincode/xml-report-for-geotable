@@ -1,0 +1,92 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <OutputType>Library</OutputType>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
+    <UseWindowsForms>true</UseWindowsForms>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyName>AlignmentApiExplorer</AssemblyName>
+    <RootNamespace>C3DAlignmentExporter</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Exclude all other .cs files except alignment_api_explorer.cs -->
+  <ItemGroup>
+    <Compile Remove="**\*.cs" />
+    <Compile Include="alignment_api_explorer.cs" />
+  </ItemGroup>
+
+  <!-- Civil 3D Installation Path Detection -->
+  <PropertyGroup>
+    <Civil3DPath Condition="Exists('C:\Program Files\Autodesk\AutoCAD 2025\')">C:\Program Files\Autodesk\AutoCAD 2025\</Civil3DPath>
+    <Civil3DPath Condition="'$(Civil3DPath)' == '' And Exists('C:\Program Files\Autodesk\AutoCAD 2024\')">C:\Program Files\Autodesk\AutoCAD 2024\</Civil3DPath>
+    <Civil3DPath Condition="'$(Civil3DPath)' == '' And Exists('C:\Program Files\Autodesk\AutoCAD 2023\')">C:\Program Files\Autodesk\AutoCAD 2023\</Civil3DPath>
+  </PropertyGroup>
+
+  <!-- Civil 3D API References -->
+  <ItemGroup>
+    <Reference Include="AcCoreMgd">
+      <HintPath>$(Civil3DPath)AcCoreMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AcDbMgd">
+      <HintPath>$(Civil3DPath)AcDbMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AcMgd">
+      <HintPath>$(Civil3DPath)AcMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AecBaseMgd">
+      <HintPath>$(Civil3DPath)ACA\AecBaseMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="AeccDbMgd">
+      <HintPath>$(Civil3DPath)C3D\AeccDbMgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- NuGet Packages -->
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <!-- Post-Build: Copy to Civil 3D Plugins -->
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(Civil3DPath)' != ''">
+    <Message Text="Copying $(TargetFileName) and dependencies to Civil 3D plugins folder..." Importance="high" />
+    
+    <!-- Create bundle structure for 2025 -->
+    <MakeDir Directories="$(AppData)\Autodesk\ApplicationPlugins\AlignmentApiExplorer.bundle\Contents\Windows\2025" />
+    
+    <!-- Create bundle structure for 2024 -->
+    <MakeDir Directories="$(AppData)\Autodesk\ApplicationPlugins\AlignmentApiExplorer.bundle\Contents\Windows\2024" />
+    
+    <!-- Create bundle structure for 2023 -->
+    <MakeDir Directories="$(AppData)\Autodesk\ApplicationPlugins\AlignmentApiExplorer.bundle\Contents\Windows\2023" />
+
+    <!-- Copy main DLL to all versions -->
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\AlignmentApiExplorer.bundle\Contents\Windows\2025" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\AlignmentApiExplorer.bundle\Contents\Windows\2024" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\AlignmentApiExplorer.bundle\Contents\Windows\2023" />
+
+    <!-- Copy all dependencies (including Newtonsoft.Json) -->
+    <ItemGroup>
+      <DependencyFiles Include="$(OutDir)*.dll" Exclude="$(TargetPath)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DependencyFiles)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\AlignmentApiExplorer.bundle\Contents\Windows\2025" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(DependencyFiles)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\AlignmentApiExplorer.bundle\Contents\Windows\2024" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(DependencyFiles)" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\AlignmentApiExplorer.bundle\Contents\Windows\2023" SkipUnchangedFiles="true" />
+
+    <!-- Copy PackageContents.xml -->
+    <Copy SourceFiles="$(ProjectDir)PackageContents.xml" DestinationFolder="$(AppData)\Autodesk\ApplicationPlugins\AlignmentApiExplorer.bundle" Condition="Exists('$(ProjectDir)PackageContents.xml')" />
+  </Target>
+
+</Project>
+

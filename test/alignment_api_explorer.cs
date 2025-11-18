@@ -1,0 +1,192 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Autodesk.AutoCAD.Runtime;
+using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
+using Autodesk.Civil.ApplicationServices;
+using Autodesk.Civil.DatabaseServices;
+using Newtonsoft.Json;
+
+namespace C3DAlignmentExporter
+{
+    public class Commands
+    {
+        [CommandMethod("EXPORT_ALIGNMENT_GEOMETRY_JSON")] 
+        public void ExportAlignmentGeometryJson()
+        {
+            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Editor ed = doc.Editor;
+            Database db = doc.Database;
+            CivilDocument civDoc = CivilDocument.GetCivilDocument(db);
+
+            try
+            {
+                PromptEntityOptions peo = new PromptEntityOptions("\nSelect an Alignment: ");
+                peo.SetRejectMessage("\nObject must be an Alignment.");
+                peo.AddAllowedClass(typeof(Alignment), true);
+                var per = ed.GetEntity(peo);
+                if (per.Status != PromptStatus.OK)
+                    return;
+
+                using (Transaction tr = db.TransactionManager.StartTransaction())
+                {
+                    Alignment alignment = tr.GetObject(per.ObjectId, OpenMode.ForRead) as Alignment;
+                    if (alignment == null)
+                    {
+                        ed.WriteMessage("\nFailed to read alignment.");
+                        return;
+                    }
+
+                    var exportData = new List<object>();
+
+                    AlignmentEntityCollection ents = alignment.Entities;
+
+                    for (int i = 0; i < ents.Count; i++)
+                    {
+                        AlignmentEntity ent = ents[i];
+                        if (ent == null) continue;
+                        
+                        var segmentData = new Dictionary<string, object>();
+
+                        segmentData["Index"] = i;
+                        segmentData["EntityType"] = ent.EntityType.ToString();
+
+                        switch (ent.EntityType)
+                        {
+                            case AlignmentEntityType.Line:
+                                AlignmentLine line = ent as AlignmentLine;
+                                if (line != null)
+                                {
+                                    segmentData["StartStation"] = line.StartStation;
+                                    segmentData["EndStation"] = line.EndStation;
+                                    segmentData["Length"] = line.Length;
+                                    
+                                    // Get 3D coordinates using PointLocation
+                                    double x1 = 0, y1 = 0, z1 = 0;
+                                    double x2 = 0, y2 = 0, z2 = 0;
+                                    alignment.PointLocation(line.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                                    alignment.PointLocation(line.EndStation, 0, 0, ref x2, ref y2, ref z2);
+                                    
+                                    segmentData["StartPoint"] = new { X = x1, Y = y1, Z = z1 };
+                                    segmentData["EndPoint"] = new { X = x2, Y = y2, Z = z2 };
+                                    segmentData["Direction"] = line.Direction;
+                                }
+                                break;
+
+                            case AlignmentEntityType.Arc:
+                                AlignmentArc arc = ent as AlignmentArc;
+                                if (arc != null)
+                                {
+                                    segmentData["StartStation"] = arc.StartStation;
+                                    segmentData["EndStation"] = arc.EndStation;
+                                    segmentData["Radius"] = arc.Radius;
+                                    segmentData["Delta"] = arc.Delta;
+                                    segmentData["Length"] = arc.Length;
+                                    segmentData["Clockwise"] = arc.Clockwise;
+                                    
+                                    // Get 3D coordinates using PointLocation
+                                    double ax1 = 0, ay1 = 0, az1 = 0;
+                                    double ax2 = 0, ay2 = 0, az2 = 0;
+                                    alignment.PointLocation(arc.StartStation, 0, 0, ref ax1, ref ay1, ref az1);
+                                    alignment.PointLocation(arc.EndStation, 0, 0, ref ax2, ref ay2, ref az2);
+                                    
+                                    segmentData["StartPoint"] = new { X = ax1, Y = ay1, Z = az1 };
+                                    segmentData["EndPoint"] = new { X = ax2, Y = ay2, Z = az2 };
+                                    
+                                    // Add PC = startpoint of arc
+                                    segmentData["PC"] = new { X = ax1, Y = ay1, Z = az1 };
+                                    
+                                    // Add PT = endpoint of arc
+                                    segmentData["PT"] = new { X = ax2, Y = ay2, Z = az2 };
+                                    
+                                    // Add center point of circular curve (2D)
+                                    var center = arc.CenterPoint;
+                                    segmentData["CenterPoint"] = new { X = center.X, Y = center.Y, Z = 0.0 };
+                                    
+                                    // Get PIStation from arc
+                                    try
+                                    {
+                                        double piStation = arc.PIStation;
+                                        segmentData["PIStation"] = piStation;
+                                        
+                                        // Get PIPoint from sub-entity
+                                        if (arc.SubEntityCount > 0)
+                                        {
+                                            var subEntity = arc[0];
+                                            if (subEntity is AlignmentSubEntityArc)
+                                            {
+                                                var subEntityArc = subEntity as AlignmentSubEntityArc;
+                                                var piPoint = subEntityArc.PIPoint;
+                                                
+                                                // Get Z coordinate at PI station (use exact X,Y from PIPoint, get Z from alignment)
+                                                double piX = piPoint.X;
+                                                double piY = piPoint.Y;
+                                                double piZ = 0;
+                                                alignment.PointLocation(piStation, 0, 0, ref piX, ref piY, ref piZ);
+                                                
+                                                // Use exact X,Y from PIPoint (not modified by PointLocation)
+                                                segmentData["PIPoint"] = new { X = piPoint.X, Y = piPoint.Y, Z = piZ };
+                                            }
+                                        }
+                                    }
+                                    catch { }
+                                }
+                                break;
+
+                            case AlignmentEntityType.Spiral:
+                                AlignmentSpiral sp = ent as AlignmentSpiral;
+                                if (sp != null)
+                                {
+                                    segmentData["StartStation"] = sp.StartStation;
+                                    segmentData["EndStation"] = sp.EndStation;
+                                    segmentData["Length"] = sp.Length;
+                                    
+                                    // Get 3D coordinates using PointLocation
+                                    double sx1 = 0, sy1 = 0, sz1 = 0;
+                                    double sx2 = 0, sy2 = 0, sz2 = 0;
+                                    alignment.PointLocation(sp.StartStation, 0, 0, ref sx1, ref sy1, ref sz1);
+                                    alignment.PointLocation(sp.EndStation, 0, 0, ref sx2, ref sy2, ref sz2);
+                                    
+                                    segmentData["StartPoint"] = new { X = sx1, Y = sy1, Z = sz1 };
+                                    segmentData["EndPoint"] = new { X = sx2, Y = sy2, Z = sz2 };
+                                    
+                                    // Try to get spiral properties if available
+                                    try
+                                    {
+                                        segmentData["RadiusIn"] = sp.RadiusIn;
+                                    }
+                                    catch { }
+                                    
+                                    try
+                                    {
+                                        segmentData["RadiusOut"] = sp.RadiusOut;
+                                    }
+                                    catch { }
+                                }
+                                break;
+                        }
+
+                        exportData.Add(segmentData);
+                    }
+
+                    string json = JsonConvert.SerializeObject(exportData, Formatting.Indented);
+
+                    string folder = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                    string path = Path.Combine(folder, $"AlignmentExport_{alignment.Name}.json");
+                    File.WriteAllText(path, json);
+
+                    tr.Commit();
+
+                    ed.WriteMessage($"\nExported to: {path}");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Application.ShowAlertDialog($"Error: {ex.Message}");
+            }
+        }
+    }
+}
