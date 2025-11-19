@@ -1,3 +1,5 @@
+#pragma warning disable 1591
+#pragma warning disable CA1416
 /*
  * Civil 3D GeoTable Reports - .NET Add-in Starter Template
  *
@@ -8,6 +10,8 @@
 using System;
 using System.Windows.Forms;
 using System.Xml.Linq;
+using System.Drawing;
+using System.IO;
 using Autodesk.AutoCAD.Runtime;
 using AcApp = Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -28,15 +32,14 @@ using iText.IO.Font.Constants;
 using iText.Kernel.Colors;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
+// (Viewer components removed)
 
-[assembly: CommandClass(typeof(GeoTableReports.ReportCommands))]
+[assembly: CommandClass(typeof(GeoTableReports.ReportCommands2025))]
 
 namespace GeoTableReports
 {
-    public class ReportCommands : IExtensionApplication
+    public class ReportCommands2025 : IExtensionApplication
     {
-        private static PaletteSet paletteSet;
-        private static ReportPanelControl reportPanel;
 
         // Called when Civil 3D starts up
         public void Initialize()
@@ -51,42 +54,10 @@ namespace GeoTableReports
         // Called when Civil 3D shuts down
         public void Terminate()
         {
-            // Cleanup palette
-            if (paletteSet != null)
-            {
-                paletteSet.Close();
-                paletteSet = null;
-            }
+            // No UI resources to dispose in simplified mode
         }
 
-        /// <summary>
-        /// Command to show the GeoTable Reports panel
-        /// </summary>
-        [CommandMethod("GEOTABLE_PANEL")]
-        public void ShowReportPanel()
-        {
-            if (paletteSet == null)
-            {
-                // Create the palette set
-                paletteSet = new PaletteSet("GeoTable Reports", new System.Guid("A1B2C3D4-E5F6-4A5B-9C8D-1E2F3A4B5C6D"));
-
-                // Create the user control
-                reportPanel = new ReportPanelControl();
-
-                // Add the control to the palette
-                paletteSet.Add("Report Generator", reportPanel);
-
-                // Set palette properties
-                paletteSet.MinimumSize = new System.Drawing.Size(350, 500);
-                paletteSet.DockEnabled = (DockSides.Left | DockSides.Right);
-                paletteSet.Style = PaletteSetStyles.ShowCloseButton |
-                                   PaletteSetStyles.ShowAutoHideButton |
-                                   PaletteSetStyles.Snappable;
-            }
-
-            // Show the palette
-            paletteSet.Visible = true;
-        }
+        // Panel command removed in simplified mode
 
         /// <summary>
         /// Main command to generate geotable reports
@@ -99,163 +70,142 @@ namespace GeoTableReports
 
             try
             {
-                // Show selection dialog
-                using (var dialog = new ReportSelectionForm())
+                // Select alignment BEFORE showing dialog so preview has real data
+                ObjectId alignmentId = SelectAlignment(ed);
+                if (alignmentId == ObjectId.Null)
                 {
-                    if (dialog.ShowDialog() == DialogResult.OK)
+                    ed.WriteMessage("\nNo alignment selected.");
+                    return;
+                }
+
+                AlignmentPreviewData previewData = BuildAlignmentPreviewData(alignmentId);
+
+                using (var dialog = new ReportSelectionForm2025(previewData))
+                {
+                    if (dialog.ShowDialog() != DialogResult.OK)
+                        return;
+
+                    string reportType = dialog.ReportType; // "Vertical" or "Horizontal"
+                    string baseOutputPath = dialog.OutputPath;
+
+                    bool generateAlignmentPDF = dialog.GenerateAlignmentPDF;
+                    bool generateAlignmentTXT = dialog.GenerateAlignmentTXT;
+                    bool generateAlignmentXML = dialog.GenerateAlignmentXML;
+                    bool generateGeoTablePDF = dialog.GenerateGeoTablePDF;
+                    bool generateGeoTableEXCEL = dialog.GenerateGeoTableEXCEL;
+                    bool openFolderAfter = dialog.OpenFolderAfter;
+                    bool openFilesAfter = dialog.OpenFilesAfter;
+
+                    using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
                     {
-                        string reportType = dialog.ReportType; // "Vertical" or "Horizontal"
-                        string baseOutputPath = dialog.OutputPath;
-
-                        // Alignment Reports (Detailed)
-                        bool generateAlignmentPDF = dialog.GenerateAlignmentPDF;
-                        bool generateAlignmentTXT = dialog.GenerateAlignmentTXT;
-                        bool generateAlignmentXML = dialog.GenerateAlignmentXML;
-
-                        // GeoTable Reports (GLTT Standard)
-                        bool generateGeoTablePDF = dialog.GenerateGeoTablePDF;
-                        bool generateGeoTableEXCEL = dialog.GenerateGeoTableEXCEL;
-
-                        // Prompt user to select alignment
-                        ObjectId alignmentId = SelectAlignment(ed);
-                        if (alignmentId == ObjectId.Null)
+                        CivDb.Alignment alignment = tr.GetObject(alignmentId, OpenMode.ForRead) as CivDb.Alignment;
+                        if (alignment == null)
                         {
-                            ed.WriteMessage("\nNo alignment selected.");
+                            ed.WriteMessage("\nInvalid alignment selected.");
+                            tr.Abort();
                             return;
                         }
 
-                        // Extract data and generate report
-                        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+                        string alignmentName = "alignment";
+                        try { alignmentName = alignment.Name ?? "alignment"; } catch { }
+                        ed.WriteMessage($"\nProcessing alignment: {alignmentName}...");
+
+                        var generatedFiles = new System.Collections.Generic.List<string>();
+                        int totalSteps = (generateAlignmentPDF ? 1 : 0) + (generateAlignmentTXT ? 1 : 0) + (generateAlignmentXML ? 1 : 0) + (generateGeoTablePDF ? 1 : 0) + (generateGeoTableEXCEL ? 1 : 0);
+                        ProgressStatusWindow progressWindow = null;
+                        if (totalSteps > 0)
                         {
-                            Alignment alignment = tr.GetObject(alignmentId, OpenMode.ForRead) as Alignment;
-
-                            if (alignment == null)
+                            progressWindow = new ProgressStatusWindow(totalSteps);
+                            progressWindow.Show();
+                            System.Windows.Forms.Application.DoEvents();
+                        }
+                        try
+                        {
+                            if (generateAlignmentPDF)
                             {
-                                ed.WriteMessage("\nInvalid alignment selected.");
-                                tr.Abort();
-                                return;
+                                progressWindow?.UpdateStatus("Generating Alignment PDF...");
+                                string pdfPath = baseOutputPath + "_Alignment_Report.pdf";
+                                if (reportType == "Vertical")
+                                    GenerateVerticalReportPdf(alignment, pdfPath);
+                                else
+                                    GenerateHorizontalReportPdf(alignment, pdfPath);
+                                generatedFiles.Add(pdfPath);
+                                progressWindow?.IncrementProgress();
                             }
-
-                            // Get alignment name safely for progress message
-                            string alignmentName = "alignment";
-                            try
+                            if (generateAlignmentTXT)
                             {
-                                alignmentName = alignment.Name ?? "alignment";
+                                progressWindow?.UpdateStatus("Generating Alignment TXT...");
+                                string txtPath = baseOutputPath + "_Alignment_Report.txt";
+                                if (reportType == "Vertical")
+                                    GenerateVerticalReport(alignment, txtPath);
+                                else
+                                    GenerateHorizontalReport(alignment, txtPath);
+                                generatedFiles.Add(txtPath);
+                                progressWindow?.IncrementProgress();
                             }
-                            catch
+                            if (generateAlignmentXML)
                             {
-                                alignmentName = "alignment";
+                                progressWindow?.UpdateStatus("Generating Alignment XML...");
+                                string xmlPath = baseOutputPath + "_Alignment_Report.xml";
+                                if (reportType == "Vertical")
+                                    GenerateVerticalReportXml(alignment, xmlPath);
+                                else
+                                    GenerateHorizontalReportXml(alignment, xmlPath);
+                                generatedFiles.Add(xmlPath);
+                                progressWindow?.IncrementProgress();
                             }
-
-                            // Show progress
-                            ed.WriteMessage($"\nProcessing alignment: {alignmentName}...");
-
-                            try
+                            if (generateGeoTablePDF)
                             {
-                                var generatedFiles = new System.Collections.Generic.List<string>();
-
-                                // === ALIGNMENT REPORTS (Detailed) ===
-                                if (generateAlignmentPDF)
+                                progressWindow?.UpdateStatus("Generating GeoTable PDF...");
+                                string geoPdf = baseOutputPath + "_GeoTable.pdf";
+                                if (reportType == "Vertical")
+                                    GenerateVerticalReportPdf(alignment, geoPdf); // fallback
+                                else
+                                    GenerateHorizontalGeoTablePdf(alignment, geoPdf);
+                                generatedFiles.Add(geoPdf);
+                                progressWindow?.IncrementProgress();
+                            }
+                            if (generateGeoTableEXCEL)
+                            {
+                                progressWindow?.UpdateStatus("Generating GeoTable Excel...");
+                                string geoXlsx = baseOutputPath + "_GeoTable.xlsx";
+                                if (reportType == "Vertical")
+                                    GenerateVerticalReportExcel(alignment, geoXlsx); // fallback
+                                else
+                                    GenerateHorizontalGeoTableExcel(alignment, geoXlsx);
+                                generatedFiles.Add(geoXlsx);
+                                progressWindow?.IncrementProgress();
+                            }
+                            tr.Commit();
+                            progressWindow?.Complete("All reports generated successfully!");
+                            System.Threading.Thread.Sleep(800);
+                            progressWindow?.Close();
+                            if (generatedFiles.Count > 0)
+                            {
+                                string message = $"Report(s) generated successfully!\n\n{generatedFiles.Count} file(s):";
+                                foreach (var f in generatedFiles) message += $"\n• {System.IO.Path.GetFileName(f)}";
+                                string folder = System.IO.Path.GetDirectoryName(generatedFiles[0]) ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                                message += $"\n\nLocation: {folder}";
+                                System.Windows.Forms.MessageBox.Show(message, "Success", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+                                ed.WriteMessage("\n✓ Reports generated successfully.");
+                                if (openFolderAfter) { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = folder, UseShellExecute = true }); } catch { } }
+                                if (openFilesAfter)
                                 {
-                                    string pdfPath = baseOutputPath + "_Alignment_Report.pdf";
-                                    ed.WriteMessage($"\nGenerating Alignment PDF: {pdfPath}");
-
-                                    if (reportType == "Vertical")
-                                        GenerateVerticalReportPdf(alignment, pdfPath);
-                                    else
-                                        GenerateHorizontalReportPdf(alignment, pdfPath);
-
-                                    generatedFiles.Add(pdfPath);
-                                    ed.WriteMessage($"\n✓ Alignment PDF saved successfully");
-                                }
-
-                                if (generateAlignmentTXT)
-                                {
-                                    string txtPath = baseOutputPath + "_Alignment_Report.txt";
-                                    ed.WriteMessage($"\nGenerating Alignment TXT: {txtPath}");
-
-                                    if (reportType == "Vertical")
-                                        GenerateVerticalReport(alignment, txtPath);
-                                    else
-                                        GenerateHorizontalReport(alignment, txtPath);
-
-                                    generatedFiles.Add(txtPath);
-                                    ed.WriteMessage($"\n✓ Alignment TXT saved successfully");
-                                }
-
-                                if (generateAlignmentXML)
-                                {
-                                    string xmlPath = baseOutputPath + "_Alignment_Report.xml";
-                                    ed.WriteMessage($"\nGenerating Alignment XML: {xmlPath}");
-
-                                    if (reportType == "Vertical")
-                                        GenerateVerticalReportXml(alignment, xmlPath);
-                                    else
-                                        GenerateHorizontalReportXml(alignment, xmlPath);
-
-                                    generatedFiles.Add(xmlPath);
-                                    ed.WriteMessage($"\n✓ Alignment XML saved successfully");
-                                }
-
-                                // === GEOTABLE REPORTS (GLTT Standard) ===
-                                if (generateGeoTablePDF)
-                                {
-                                    string pdfPath = baseOutputPath + "_GeoTable.pdf";
-                                    ed.WriteMessage($"\nGenerating GeoTable PDF: {pdfPath}");
-
-                                    if (reportType == "Vertical")
+                                    foreach (var f in generatedFiles)
                                     {
-                                        // Vertical profile doesn't have GeoTable format yet, use detailed
-                                        GenerateVerticalReportPdf(alignment, pdfPath);
+                                        try { if (File.Exists(f)) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = f, UseShellExecute = true }); } catch { }
                                     }
-                                    else
-                                        GenerateHorizontalGeoTablePdf(alignment, pdfPath);
-
-                                    generatedFiles.Add(pdfPath);
-                                    ed.WriteMessage($"\n✓ GeoTable PDF saved successfully");
                                 }
-
-                                if (generateGeoTableEXCEL)
-                                {
-                                    string excelPath = baseOutputPath + "_GeoTable.xlsx";
-                                    ed.WriteMessage($"\nGenerating GeoTable EXCEL: {excelPath}");
-
-                                    if (reportType == "Vertical")
-                                    {
-                                        // Vertical profile doesn't have GeoTable format yet, use detailed
-                                        GenerateVerticalReportExcel(alignment, excelPath);
-                                    }
-                                    else
-                                        GenerateHorizontalGeoTableExcel(alignment, excelPath);
-
-                                    generatedFiles.Add(excelPath);
-                                    ed.WriteMessage($"\n✓ GeoTable EXCEL saved successfully");
-                                }
-
-                                tr.Commit();
-
-                                // Show success message
-                                string successMessage = $"Report(s) generated successfully!\n\n{generatedFiles.Count} file(s) created:\n";
-                                foreach (string file in generatedFiles)
-                                {
-                                    successMessage += $"\n• {System.IO.Path.GetFileName(file)}";
-                                }
-                                successMessage += $"\n\nLocation: {System.IO.Path.GetDirectoryName(generatedFiles[0])}";
-
-                                MessageBox.Show(
-                                    successMessage,
-                                    "Success",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxIcon.Information
-                                );
-
-                                ed.WriteMessage($"\n✓ All reports generated successfully!");
                             }
-                            catch (System.Exception reportEx)
-                            {
-                                tr.Abort();
-                                throw new System.Exception($"Error generating {reportType} report: {reportEx.Message}", reportEx);
-                            }
+                            else ed.WriteMessage("\nNo formats selected; nothing generated.");
+                        }
+                        catch (System.Exception reportEx)
+                        {
+                            progressWindow?.Fail($"Error: {reportEx.Message}");
+                            System.Threading.Thread.Sleep(1200);
+                            progressWindow?.Close();
+                            tr.Abort();
+                            throw new System.Exception($"Error generating {reportType} report: {reportEx.Message}", reportEx);
                         }
                     }
                 }
@@ -264,20 +214,117 @@ namespace GeoTableReports
             {
                 string errorMessage = ex.Message;
                 if (ex.InnerException != null)
-                {
-                    errorMessage += $"\n\nInner Exception: {ex.InnerException.Message}";
-                }
-
+                    errorMessage += $"\nInner: {ex.InnerException.Message}";
                 ed.WriteMessage($"\n✗ Error: {errorMessage}");
-                ed.WriteMessage($"\nStack Trace: {ex.StackTrace}");
-
-                MessageBox.Show(
-                    $"Error generating report:\n\n{errorMessage}",
-                    "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                System.Windows.Forms.MessageBox.Show(errorMessage, "Report Generation Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
             }
+        }
+
+        // Build preview data for dialog (metadata + sample lines for both horizontal & vertical)
+        private AlignmentPreviewData BuildAlignmentPreviewData(ObjectId alignmentId)
+        {
+            var data = new AlignmentPreviewData();
+            try
+            {
+                AcApp.Document doc = AcApp.Application.DocumentManager.MdiActiveDocument;
+                using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+                {
+                    var alignment = tr.GetObject(alignmentId, OpenMode.ForRead) as CivDb.Alignment;
+                    if (alignment == null) return data;
+                    data.AlignmentName = alignment.Name ?? "(Unnamed)";
+                    try { data.Description = alignment.Description ?? ""; } catch { }
+                    try { data.StyleName = alignment.StyleName ?? ""; } catch { }
+                    double startSta = 0; double endSta = 0;
+                    try { if (alignment.Entities.Count > 0) { startSta = (alignment.Entities[0] as dynamic).StartStation; var last = alignment.Entities[alignment.Entities.Count - 1]; endSta = (last as dynamic).EndStation; } } catch { }
+                    data.StartStation = startSta; data.EndStation = endSta;
+                    int lines = 0, arcs = 0, spirals = 0;
+                    for (int i = 0; i < alignment.Entities.Count; i++)
+                    {
+                        var e = alignment.Entities[i];
+                        if (e == null) continue;
+                        if (e.EntityType == AlignmentEntityType.Line) lines++;
+                        else if (e.EntityType == AlignmentEntityType.Arc) arcs++;
+                        else if (e.EntityType == AlignmentEntityType.Spiral) spirals++;
+                        if (data.HorizontalSampleLines.Count < 15) // collect small textual snippet (similar to TXT)
+                        {
+                            try
+                            {
+                                switch (e.EntityType)
+                                {
+                                    case AlignmentEntityType.Line:
+                                        var l = e as AlignmentLine;
+                                        if (l != null)
+                                        {
+                                            double x1=0,y1=0,z1=0; double x2=0,y2=0,z2=0; alignment.PointLocation(l.StartStation,0,0,ref x1,ref y1,ref z1); alignment.PointLocation(l.EndStation,0,0,ref x2,ref y2,ref z2);
+                                            data.HorizontalSampleLines.Add($"ST {FormatStation(l.StartStation),15} {FormatWithProperRounding(y1,4),15} {FormatWithProperRounding(x1,4),15}");
+                                            data.HorizontalSampleLines.Add($"PI {FormatStation(l.EndStation),15} {FormatWithProperRounding(y2,4),15} {FormatWithProperRounding(x2,4),15}");
+                                        }
+                                        break;
+                                    case AlignmentEntityType.Arc:
+                                        var a = e as AlignmentArc;
+                                        if (a != null)
+                                        {
+                                            double x1=0,y1=0,z1=0; double x2=0,y2=0,z2=0; alignment.PointLocation(a.StartStation,0,0,ref x1,ref y1,ref z1); alignment.PointLocation(a.EndStation,0,0,ref x2,ref y2,ref z2);
+                                            data.HorizontalSampleLines.Add($"SC {FormatStation(a.StartStation),15} {FormatWithProperRounding(y1,4),15} {FormatWithProperRounding(x1,4),15}");
+                                            data.HorizontalSampleLines.Add($"CS {FormatStation(a.EndStation),15} {FormatWithProperRounding(y2,4),15} {FormatWithProperRounding(x2,4),15}");
+                                        }
+                                        break;
+                                    case AlignmentEntityType.Spiral:
+                                        var se = e; // sub-entity access for stations
+                                        try
+                                        {
+                                            dynamic dyn = se;
+                                            double ss = dyn.StartStation; double es = dyn.EndStation; double xm=0,ym=0,zm=0; alignment.PointLocation((ss+es)/2,0,0,ref xm,ref ym,ref zm);
+                                            double x1=0,y1=0,z1=0; double x2=0,y2=0,z2=0; alignment.PointLocation(ss,0,0,ref x1,ref y1,ref z1); alignment.PointLocation(es,0,0,ref x2,ref y2,ref z2);
+                                            data.HorizontalSampleLines.Add($"TS {FormatStation(ss),15} {FormatWithProperRounding(y1,4),15} {FormatWithProperRounding(x1,4),15}");
+                                            data.HorizontalSampleLines.Add($"SPI{FormatStation((ss+es)/2),15} {FormatWithProperRounding(ym,4),15} {FormatWithProperRounding(xm,4),15}");
+                                            data.HorizontalSampleLines.Add($"SC {FormatStation(es),15} {FormatWithProperRounding(y2,4),15} {FormatWithProperRounding(x2,4),15}");
+                                        }
+                                        catch { }
+                                        break;
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                    data.LineCount = lines; data.ArcCount = arcs; data.SpiralCount = spirals;
+
+                    // Vertical profile sample
+                    try
+                    {
+                        foreach (ObjectId pid in alignment.GetProfileIds())
+                        {
+                            using (Profile profile = pid.GetObject(OpenMode.ForRead) as Profile)
+                            {
+                                if (profile != null && profile.Entities.Count > 0)
+                                {
+                                    data.ProfileName = profile.Name ?? "";
+                                    for (int i = 0; i < profile.Entities.Count && data.VerticalSampleLines.Count < 12; i++)
+                                    {
+                                        var pe = profile.Entities[i];
+                                        if (pe.EntityType == ProfileEntityType.Tangent && pe is ProfileTangent t)
+                                        {
+                                            data.VerticalSampleLines.Add($"POB {FormatStation(t.StartStation),15} {t.StartElevation,12:F2}");
+                                            data.VerticalSampleLines.Add($"PVI {FormatStation(t.EndStation),15} {t.EndElevation,12:F2}");
+                                        }
+                                        else if (pe.EntityType == ProfileEntityType.Circular && pe is ProfileCircular c)
+                                        {
+                                            data.VerticalSampleLines.Add($"PVC {FormatStation(c.StartStation),15} {c.StartElevation,12:F2}");
+                                            data.VerticalSampleLines.Add($"PVI {FormatStation(c.PVIStation),15} {c.PVIElevation,12:F2}");
+                                            data.VerticalSampleLines.Add($"PVT {FormatStation(c.EndStation),15} {c.EndElevation,12:F2}");
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                    tr.Commit();
+                }
+            }
+            catch { }
+            return data;
         }
 
         /// <summary>
@@ -291,68 +338,37 @@ namespace GeoTableReports
 
             try
             {
-                using (var dialog = new BatchProcessForm())
+                string outputFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "GeoTable_Batch");
+                if (!System.IO.Directory.Exists(outputFolder)) System.IO.Directory.CreateDirectory(outputFolder);
+                bool includeHorizontal = true; // simplified mode only horizontal
+
+                using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
                 {
-                    if (dialog.ShowDialog() == DialogResult.OK)
+                    CivilDocument civilDoc = CivilApplication.ActiveDocument;
+                    using (ObjectIdCollection alignmentIds = civilDoc.GetAlignmentIds())
                     {
-                        string outputFolder = dialog.OutputFolder;
-                        bool includeVertical = dialog.IncludeVertical;
-                        bool includeHorizontal = dialog.IncludeHorizontal;
-
-                        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+                        int count = 0;
+                        int total = alignmentIds.Count;
+                        foreach (ObjectId alignmentId in alignmentIds)
                         {
-                            CivilDocument civilDoc = CivilApplication.ActiveDocument;
-
-                            // Get all alignments in drawing
-                            using (ObjectIdCollection alignmentIds = civilDoc.GetAlignmentIds())
+                            Alignment alignment = tr.GetObject(alignmentId, OpenMode.ForRead) as Alignment;
+                            if (alignment == null) continue;
+                            count++;
+                            ed.WriteMessage($"\nProcessing {count}/{total}: {alignment.Name}");
+                            if (includeHorizontal)
                             {
-                                int count = 0;
-                                int total = alignmentIds.Count;
-
-                                foreach (ObjectId alignmentId in alignmentIds)
-                                {
-                                    Alignment alignment = tr.GetObject(alignmentId, OpenMode.ForRead) as Alignment;
-                                    if (alignment == null) continue;
-
-                                    count++;
-                                    ed.WriteMessage($"\nProcessing {count}/{total}: {alignment.Name}");
-
-                                    // Generate reports - FIXED: Using PDF generation methods
-                                    if (includeVertical)
-                                    {
-                                        string path = System.IO.Path.Combine(outputFolder, $"{alignment.Name}_Vertical.pdf");
-                                        GenerateVerticalReportPdf(alignment, path);
-                                    }
-
-                                    if (includeHorizontal)
-                                    {
-                                        string path = System.IO.Path.Combine(outputFolder, $"{alignment.Name}_Horizontal.pdf");
-                                        GenerateHorizontalReportPdf(alignment, path);
-                                    }
-                                }
-
-                                tr.Commit();
-
-                                MessageBox.Show(
-                                    $"Batch processing complete!\n\n{count} alignments processed.",
-                                    "Success",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxIcon.Information
-                                );
+                                string path = System.IO.Path.Combine(outputFolder, $"{alignment.Name}_Horizontal.pdf");
+                                GenerateHorizontalReportPdf(alignment, path);
                             }
                         }
+                        tr.Commit();
+                        ed.WriteMessage($"\nBatch processing complete: {count} alignments processed. Output folder: {outputFolder}");
                     }
                 }
             }
             catch (System.Exception ex)
             {
-                ed.WriteMessage($"\n✗ Error: {ex.Message}");
-                MessageBox.Show(
-                    $"Error during batch processing:\n\n{ex.Message}",
-                    "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                ed.WriteMessage($"\nError during batch processing: {ex.Message}");
             }
         }
 
@@ -706,13 +722,13 @@ namespace GeoTableReports
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
 
             // NORTHING with left-divider
-            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{northing:F4}").SetFont(font).SetFontSize(9))
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatWithProperRounding(northing, 4)).SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
                 .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f)));
 
             // EASTING
-            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{easting:F4}").SetFont(font).SetFontSize(9))
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatWithProperRounding(easting, 4)).SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
 
@@ -792,7 +808,17 @@ namespace GeoTableReports
                                     WriteArcElement(writer, entity as AlignmentArc, alignment, i);
                                     break;
                                 case AlignmentEntityType.Spiral:
-                                    WriteSpiralElement(writer, entity as AlignmentSpiral, alignment, i);
+                                    // Try to cast to AlignmentSpiral, if that fails use AlignmentEntity directly
+                                    AlignmentSpiral spiralEntity = entity as AlignmentSpiral;
+                                    if (spiralEntity == null)
+                                    {
+                                        // If cast fails, try accessing spiral through SubEntity
+                                        WriteSpiralElementFromEntity(writer, entity, alignment, i);
+                                    }
+                                    else
+                                    {
+                                        WriteSpiralElement(writer, spiralEntity, alignment, i);
+                                    }
                                     break;
                                 default:
                                     writer.WriteLine($"Element: {entity.EntityType}");
@@ -898,7 +924,7 @@ namespace GeoTableReports
                 writer.WriteLine("Element: Linear");
 
                 // InRails format uses ST (Start of Tangent) for linear element start points
-                writer.WriteLine($" ST  ( ) {FormatStation(line.StartStation),15} {y1,15:F4} {x1,15:F4}");
+                writer.WriteLine($" ST  ( ) {FormatStation(line.StartStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
 
                 // Determine end point label based on what element type comes after this tangent
                 // We need to look ahead in the ORIGINAL alignment entities to see what follows this line
@@ -922,9 +948,9 @@ namespace GeoTableReports
                     }
                 }
 
-                writer.WriteLine($" {endLabel}( ) {FormatStation(line.EndStation),15} {y2,15:F4} {x2,15:F4}");
+                writer.WriteLine($" {endLabel}( ) {FormatStation(line.EndStation),15} {FormatWithProperRounding(y2, 4),15} {FormatWithProperRounding(x2, 4),15}");
                 writer.WriteLine($" Tangent Direction: {bearing}");
-                writer.WriteLine($" Tangent Length: {line.Length,15:F4}");
+                writer.WriteLine($" Tangent Length: {FormatWithProperRounding(line.Length, 4),15}");
                 writer.WriteLine();
             }
             catch (System.Exception ex)
@@ -1003,28 +1029,143 @@ namespace GeoTableReports
                 double external = arc.Radius * (1 / Math.Cos(Math.Abs(deltaRadians) / 2) - 1);
 
                 writer.WriteLine("Element: Circular");
-                writer.WriteLine($" SC  ( ) {FormatStation(arc.StartStation),15} {y1,15:F4} {x1,15:F4}");
-                writer.WriteLine($" PI  ( ) {FormatStation(piStation),15} {yPI,15:F4} {xPI,15:F4}");
-                writer.WriteLine($" CC  ( ) {yc,32:F4} {xc,15:F4}");
-                writer.WriteLine($" CS  ( ) {FormatStation(arc.EndStation),15} {y2,15:F4} {x2,15:F4}");
-                writer.WriteLine($" Radius: {arc.Radius,15:F4}");
-                writer.WriteLine($" Design Speed(mph): {50.0,15:F4}");
+                writer.WriteLine($" SC  ( ) {FormatStation(arc.StartStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
+                writer.WriteLine($" PI  ( ) {FormatStation(piStation),15} {FormatWithProperRounding(yPI, 4),15} {FormatWithProperRounding(xPI, 4),15}");
+                writer.WriteLine($" CC  ( ) {FormatWithProperRounding(yc, 4),32} {FormatWithProperRounding(xc, 4),15}");
+                writer.WriteLine($" CS  ( ) {FormatStation(arc.EndStation),15} {FormatWithProperRounding(y2, 4),15} {FormatWithProperRounding(x2, 4),15}");
+                writer.WriteLine($" Radius: {FormatWithProperRounding(arc.Radius, 4),15}");
+                writer.WriteLine($" Design Speed(mph): {FormatWithProperRounding(50.0, 4),15}");
                 writer.WriteLine($" Cant(inches): {2.0,15:F3}");
                 writer.WriteLine($" Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}");
                 double degreeOfCurvatureChord = (100.0 * deltaRadians) / (arc.Length) * (180.0 / Math.PI);
                 writer.WriteLine($"Degree of Curvature(Chord): {FormatAngle(degreeOfCurvatureChord)}");
-                writer.WriteLine($" Length: {arc.Length,15:F4}");
-                writer.WriteLine($" Length(Chorded): {arc.Length,15:F4}");
-                writer.WriteLine($" Tangent: {tangent,15:F4}");
-                writer.WriteLine($" Chord: {chord,15:F4}");
-                writer.WriteLine($" Middle Ordinate: {middleOrdinate,15:F4}");
-                writer.WriteLine($" External: {external,15:F4}");
+                writer.WriteLine($" Length: {FormatWithProperRounding(arc.Length, 4),15}");
+                writer.WriteLine($" Length(Chorded): {FormatWithProperRounding(arc.Length, 4),15}");
+                writer.WriteLine($" Tangent: {FormatWithProperRounding(tangent, 4),15}");
+                writer.WriteLine($" Chord: {FormatWithProperRounding(chord, 4),15}");
+                writer.WriteLine($" Middle Ordinate: {FormatWithProperRounding(middleOrdinate, 4),15}");
+                writer.WriteLine($" External: {FormatWithProperRounding(external, 4),15}");
                 writer.WriteLine();
             }
             catch (System.Exception ex)
             {
                 writer.WriteLine("Element: Circular");
                 writer.WriteLine($"Error writing arc data: {ex.Message}");
+                writer.WriteLine();
+            }
+        }
+
+        private void WriteSpiralElementFromEntity(System.IO.StreamWriter writer, AlignmentEntity entity, CivDb.Alignment alignment, int index)
+        {
+            if (entity == null)
+            {
+                writer.WriteLine("Element: Clothoid");
+                writer.WriteLine("Unable to read spiral data - entity is null.");
+                writer.WriteLine();
+                return;
+            }
+
+            try
+            {
+                writer.WriteLine("Element: Clothoid");
+                writer.WriteLine($"DEBUG: Entity Type: {entity.GetType().Name}");
+                writer.WriteLine($"DEBUG: EntityType: {entity.EntityType}");
+                writer.WriteLine($"DEBUG: SubEntityCount: {entity.SubEntityCount}");
+
+                // Try to access spiral data through SubEntity
+                if (entity.SubEntityCount > 0)
+                {
+                    var subEntity = entity[0];
+                    writer.WriteLine($"DEBUG: SubEntity Type: {subEntity.GetType().Name}");
+
+                    if (subEntity is AlignmentSubEntitySpiral)
+                    {
+                        var spiralSubEntity = subEntity as AlignmentSubEntitySpiral;
+
+                        double radiusIn = spiralSubEntity.RadiusIn;
+                        double radiusOut = spiralSubEntity.RadiusOut;
+                        double length = spiralSubEntity.Length;
+
+                        double x1 = 0, y1 = 0, z1 = 0;
+                        double x2 = 0, y2 = 0, z2 = 0;
+                        double xMid = 0, yMid = 0, zMid = 0;
+
+                        // Get start and end stations from the entity
+                        double startStation = 0, endStation = 0;
+                        try
+                        {
+                            // Access via dynamic to get StartStation/EndStation
+                            dynamic dynEntity = entity;
+                            startStation = dynEntity.StartStation;
+                            endStation = dynEntity.EndStation;
+                        }
+                        catch (System.Exception ex)
+                        {
+                            writer.WriteLine($"DEBUG: Could not access stations: {ex.Message}");
+                        }
+
+                        alignment.PointLocation(startStation, 0, 0, ref x1, ref y1, ref z1);
+                        alignment.PointLocation(endStation, 0, 0, ref x2, ref y2, ref z2);
+                        alignment.PointLocation((startStation + endStation) / 2, 0, 0, ref xMid, ref yMid, ref zMid);
+
+                        bool isEntry = radiusIn > radiusOut || (radiusIn == 0 && radiusOut > 0);
+                        double R1 = isEntry ? double.PositiveInfinity : (radiusIn > 0 ? radiusIn : 0);
+                        double R2 = isEntry ? (radiusOut > 0 ? radiusOut : 0) : double.PositiveInfinity;
+                        double L = length;
+                        double R = isEntry ? R2 : R1;
+                        double A = 0;
+                        if (R > 0 && !double.IsInfinity(R))
+                        {
+                            A = Math.Sqrt(L * R);
+                        }
+                        double theta = 0;
+                        if (R > 0 && !double.IsInfinity(R))
+                        {
+                            theta = L / (2 * R);
+                        }
+
+                        writer.WriteLine(" SubEntity Access: SUCCESS via AlignmentSubEntitySpiral");
+
+                        if (isEntry)
+                        {
+                            writer.WriteLine($" TS  ( ) {FormatStation(startStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
+                            writer.WriteLine($" SPI ( ) {FormatStation((startStation + endStation) / 2),15} {FormatWithProperRounding(yMid, 4),15} {FormatWithProperRounding(xMid, 4),15}");
+                            writer.WriteLine($" SC  ( ) {FormatStation(endStation),15} {FormatWithProperRounding(y2, 4),15} {FormatWithProperRounding(x2, 4),15}");
+                        }
+                        else
+                        {
+                            writer.WriteLine($" CS  ( ) {FormatStation(startStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
+                            writer.WriteLine($" SPI ( ) {FormatStation((startStation + endStation) / 2),15} {FormatWithProperRounding(yMid, 4),15} {FormatWithProperRounding(xMid, 4),15}");
+                            writer.WriteLine($" ST  ( ) {FormatStation(endStation),15} {FormatWithProperRounding(y2, 4),15} {FormatWithProperRounding(x2, 4),15}");
+                        }
+
+                        writer.WriteLine($" R1 (Radius of curve 1): {(double.IsInfinity(R1) ? "Infinite" : FormatWithProperRounding(R1, 4)),15}");
+                        writer.WriteLine($" R2 (Radius of curve 2): {(double.IsInfinity(R2) ? "Infinite" : FormatWithProperRounding(R2, 4)),15}");
+                        writer.WriteLine($" SS (Spiral start): {FormatStation(startStation),15}");
+                        writer.WriteLine($" SE (Spiral end): {FormatStation(endStation),15}");
+                        writer.WriteLine($" L (Total arc length): {FormatWithProperRounding(L, 4),15}");
+                        writer.WriteLine($" A (Flatness parameter): {FormatWithProperRounding(A, 4),15}");
+                        writer.WriteLine();
+                        return;
+                    }
+                    else
+                    {
+                        writer.WriteLine($"DEBUG: SubEntity is not AlignmentSubEntitySpiral");
+                    }
+                }
+                else
+                {
+                    writer.WriteLine($"DEBUG: No sub-entities found");
+                }
+
+                writer.WriteLine("Unable to read spiral data - could not access spiral sub-entity.");
+                writer.WriteLine();
+            }
+            catch (System.Exception ex)
+            {
+                writer.WriteLine("Element: Clothoid");
+                writer.WriteLine($"Error extracting spiral from entity: {ex.Message}");
+                writer.WriteLine($"Stack trace: {ex.StackTrace}");
                 writer.WriteLine();
             }
         }
@@ -1045,17 +1186,45 @@ namespace GeoTableReports
                 double x2 = 0, y2 = 0, z2 = 0;
                 double xMid = 0, yMid = 0, zMid = 0;
 
-                alignment.PointLocation(spiral.StartStation, 0, 0, ref x1, ref y1, ref z1);
-                alignment.PointLocation(spiral.EndStation, 0, 0, ref x2, ref y2, ref z2);
+                // Try to get additional properties from AlignmentSubEntitySpiral
+                double radiusIn = spiral.RadiusIn;
+                double radiusOut = spiral.RadiusOut;
+                double length = spiral.Length;
+                double startStation = spiral.StartStation;
+                double endStation = spiral.EndStation;
+
+                bool gotFromSubEntity = false;
+                try
+                {
+                    if (spiral.SubEntityCount > 0)
+                    {
+                        var subEntity = spiral[0];
+                        if (subEntity is AlignmentSubEntitySpiral)
+                        {
+                            var subEntitySpiral = subEntity as AlignmentSubEntitySpiral;
+
+                            // Extract properties from sub-entity
+                            radiusIn = subEntitySpiral.RadiusIn;
+                            radiusOut = subEntitySpiral.RadiusOut;
+                            length = subEntitySpiral.Length;
+
+                            gotFromSubEntity = true;
+                        }
+                    }
+                }
+                catch { }
+
+                alignment.PointLocation(startStation, 0, 0, ref x1, ref y1, ref z1);
+                alignment.PointLocation(endStation, 0, 0, ref x2, ref y2, ref z2);
 
                 // Calculate spiral point at arc length l (midpoint for now)
-                double spiralMidStation = (spiral.StartStation + spiral.EndStation) / 2;
+                double spiralMidStation = (startStation + endStation) / 2;
                 alignment.PointLocation(spiralMidStation, 0, 0, ref xMid, ref yMid, ref zMid);
 
-                bool isEntry = spiral.RadiusIn > spiral.RadiusOut || (spiral.RadiusIn == 0 && spiral.RadiusOut > 0);
-                double R1 = isEntry ? double.PositiveInfinity : (spiral.RadiusIn > 0 ? spiral.RadiusIn : 0);  // Radius of curve 1
-                double R2 = isEntry ? (spiral.RadiusOut > 0 ? spiral.RadiusOut : 0) : double.PositiveInfinity;  // Radius of curve 2
-                double L = spiral.Length;  // Total arc length of spiral
+                bool isEntry = radiusIn > radiusOut || (radiusIn == 0 && radiusOut > 0);
+                double R1 = isEntry ? double.PositiveInfinity : (radiusIn > 0 ? radiusIn : 0);  // Radius of curve 1
+                double R2 = isEntry ? (radiusOut > 0 ? radiusOut : 0) : double.PositiveInfinity;  // Radius of curve 2
+                double L = length;  // Total arc length of spiral
 
                 // Calculate clothoid parameter A (flatness of spiral): A = sqrt(L*R)
                 double R = isEntry ? R2 : R1;
@@ -1073,29 +1242,30 @@ namespace GeoTableReports
                 }
 
                 writer.WriteLine("Element: Clothoid");
+                writer.WriteLine($" SubEntity Access: {(gotFromSubEntity ? "SUCCESS" : "Fallback to base properties")}");
 
                 if (isEntry)
                 {
-                    writer.WriteLine($" TS  ( ) {FormatStation(spiral.StartStation),15} {y1,15:F4} {x1,15:F4}");
-                    writer.WriteLine($" SPI ( ) {FormatStation(spiralMidStation),15} {yMid,15:F4} {xMid,15:F4}");
-                    writer.WriteLine($" SC  ( ) {FormatStation(spiral.EndStation),15} {y2,15:F4} {x2,15:F4}");
+                    writer.WriteLine($" TS  ( ) {FormatStation(startStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
+                    writer.WriteLine($" SPI ( ) {FormatStation(spiralMidStation),15} {FormatWithProperRounding(yMid, 4),15} {FormatWithProperRounding(xMid, 4),15}");
+                    writer.WriteLine($" SC  ( ) {FormatStation(endStation),15} {FormatWithProperRounding(y2, 4),15} {FormatWithProperRounding(x2, 4),15}");
                 }
                 else
                 {
-                    writer.WriteLine($" CS  ( ) {FormatStation(spiral.StartStation),15} {y1,15:F4} {x1,15:F4}");
-                    writer.WriteLine($" SPI ( ) {FormatStation(spiralMidStation),15} {yMid,15:F4} {xMid,15:F4}");
-                    writer.WriteLine($" ST  ( ) {FormatStation(spiral.EndStation),15} {y2,15:F4} {x2,15:F4}");
+                    writer.WriteLine($" CS  ( ) {FormatStation(startStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
+                    writer.WriteLine($" SPI ( ) {FormatStation(spiralMidStation),15} {FormatWithProperRounding(yMid, 4),15} {FormatWithProperRounding(xMid, 4),15}");
+                    writer.WriteLine($" ST  ( ) {FormatStation(endStation),15} {FormatWithProperRounding(y2, 4),15} {FormatWithProperRounding(x2, 4),15}");
                 }
 
                 // Output spiral parameters
-                writer.WriteLine($" R1 (Radius of curve 1): {(double.IsInfinity(R1) ? "Infinite" : $"{R1:F4}"),15}");
-                writer.WriteLine($" R2 (Radius of curve 2): {(double.IsInfinity(R2) ? "Infinite" : $"{R2:F4}"),15}");
-                writer.WriteLine($" SS (Spiral start): {FormatStation(spiral.StartStation),15}");
-                writer.WriteLine($" SE (Spiral end): {FormatStation(spiral.EndStation),15}");
+                writer.WriteLine($" R1 (Radius of curve 1): {(double.IsInfinity(R1) ? "Infinite" : FormatWithProperRounding(R1, 4)),15}");
+                writer.WriteLine($" R2 (Radius of curve 2): {(double.IsInfinity(R2) ? "Infinite" : FormatWithProperRounding(R2, 4)),15}");
+                writer.WriteLine($" SS (Spiral start): {FormatStation(startStation),15}");
+                writer.WriteLine($" SE (Spiral end): {FormatStation(endStation),15}");
                 writer.WriteLine($" SP (Spiral point at arc length l): {FormatStation(spiralMidStation),15}");
                 writer.WriteLine($" Θ (Central angle at spiral point): {FormatAngle(theta * 180.0 / Math.PI)}");
-                writer.WriteLine($" L (Total arc length): {L,15:F4}");
-                writer.WriteLine($" A (Flatness parameter): {A,15:F4}");
+                writer.WriteLine($" L (Total arc length): {FormatWithProperRounding(L, 4),15}");
+                writer.WriteLine($" A (Flatness parameter): {FormatWithProperRounding(A, 4),15}");
                 writer.WriteLine();
             }
             catch (System.Exception ex)
@@ -1155,6 +1325,30 @@ namespace GeoTableReports
             int min = (int)remaining;
             double sec = (remaining - min) * 60;
             return $"{deg}^{min:D2}'{sec:F4}\"";
+        }
+
+        /// <summary>
+        /// Formats a double value to a specified number of decimal places using AwayFromZero rounding.
+        /// This ensures proper rounding for surveying/engineering applications (0.5 always rounds up).
+        /// Also handles floating point precision issues by checking if value is very close to a round number.
+        /// </summary>
+        private string FormatWithProperRounding(double value, int decimalPlaces)
+        {
+            // Calculate tolerance based on the number of decimal places we're rounding to
+            // For 4 decimal places, we check if value is within 0.00005 (5e-5) of a round integer
+            // This handles cases like 24999.9999 which should be 25000.0000
+            double tolerance = 5.0 / Math.Pow(10, decimalPlaces + 1);
+
+            // Check if the value is very close to a round integer
+            double nearestInt = Math.Round(value, 0, MidpointRounding.AwayFromZero);
+            if (Math.Abs(value - nearestInt) < tolerance)
+            {
+                return nearestInt.ToString($"F{decimalPlaces}");
+            }
+
+            // Standard rounding with AwayFromZero
+            double rounded = Math.Round(value, decimalPlaces, MidpointRounding.AwayFromZero);
+            return rounded.ToString($"F{decimalPlaces}");
         }
 
         /// <summary>
@@ -1615,7 +1809,7 @@ namespace GeoTableReports
                                 WriteArcElementPdf(document, entity as AlignmentArc, alignment, i, normalFont, boldFont);
                                 break;
                             case AlignmentEntityType.Spiral:
-                                WriteSpiralElementPdf(document, entity as AlignmentSpiral, alignment, i, normalFont, boldFont);
+                                WriteSpiralElementPdf(document, entity, alignment, i, normalFont, boldFont);
                                 break;
                             default:
                                 document.Add(new Paragraph($"Element: {entity.EntityType}").SetFont(normalFont).SetFontSize(10));
@@ -1802,9 +1996,9 @@ namespace GeoTableReports
             }
         }
 
-        private void WriteSpiralElementPdf(Document document, AlignmentSpiral spiral, CivDb.Alignment alignment, int index, PdfFont normalFont, PdfFont labelFont)
+        private void WriteSpiralElementPdf(Document document, AlignmentEntity entity, CivDb.Alignment alignment, int index, PdfFont normalFont, PdfFont labelFont)
         {
-            if (spiral == null)
+            if (entity == null)
             {
                 document.Add(new Paragraph("Element: Clothoid").SetFont(labelFont).SetFontSize(10));
                 document.Add(new Paragraph("Unable to read spiral data for this alignment element.").SetFont(normalFont).SetFontSize(10));
@@ -1816,35 +2010,200 @@ namespace GeoTableReports
             {
                 double x1 = 0, y1 = 0, z1 = 0;
                 double x2 = 0, y2 = 0, z2 = 0;
-                double xMid = 0, yMid = 0, zMid = 0;
+                double xSPI = 0, ySPI = 0, zSPI = 0;
 
-                alignment.PointLocation(spiral.StartStation, 0, 0, ref x1, ref y1, ref z1);
-                alignment.PointLocation(spiral.EndStation, 0, 0, ref x2, ref y2, ref z2);
-                alignment.PointLocation((spiral.StartStation + spiral.EndStation) / 2, 0, 0, ref xMid, ref yMid, ref zMid);
+                double radiusIn = 0, radiusOut = 0, length = 0;
+                double startStation = 0, endStation = 0, spiralA = 0;
+                string spiralDirection = "DirectionRight";
+                
+                double totalX = 0, totalY = 0, delta = 0;
+                double spiralPIStation = 0;
+                bool gotSubEntityData = false;
+                bool gotSPIFromAPI = false;
 
-                bool isEntry = spiral.RadiusIn > spiral.RadiusOut || (spiral.RadiusIn == 0 && spiral.RadiusOut > 0);
-                double radiusIn = spiral.RadiusIn > 0 ? spiral.RadiusIn : 0;
-                double radiusOut = spiral.RadiusOut > 0 ? spiral.RadiusOut : 0;
-
-                document.Add(new Paragraph("Element: Clothoid").SetFont(labelFont).SetFontSize(10));
-                document.Add(new Paragraph("\n").SetFontSize(5));
-
-                if (isEntry)
+                // Access spiral through SubEntity (spirals can't be cast directly)
+                if (entity.SubEntityCount > 0)
                 {
-                    AddHorizontalDataRow(document, "TS  ( ) ", FormatStation(spiral.StartStation), y1, x1, normalFont);
-                    AddHorizontalDataRow(document, "SPI ( ) ", FormatStation((spiral.StartStation + spiral.EndStation) / 2), yMid, xMid, normalFont);
-                    AddHorizontalDataRow(document, "SC  ( ) ", FormatStation(spiral.EndStation), y2, x2, normalFont);
+                    var subEntity = entity[0];
+                    if (subEntity is AlignmentSubEntitySpiral)
+                    {
+                        var spiralSubEntity = subEntity as AlignmentSubEntitySpiral;
+                        
+                        // Get basic properties
+                        startStation = spiralSubEntity.StartStation;
+                        endStation = spiralSubEntity.EndStation;
+                        length = spiralSubEntity.Length;
+                        totalX = spiralSubEntity.TotalX;
+                        totalY = spiralSubEntity.TotalY;
+                        delta = spiralSubEntity.Delta;
+                        
+                        // Get additional properties via reflection (except SPI which we access strongly)
+                        var spiralType = spiralSubEntity.GetType();
+                        try
+                        {
+                            var radiusInProp = spiralType.GetProperty("RadiusIn");
+                            var radiusOutProp = spiralType.GetProperty("RadiusOut");
+                            var aProp = spiralType.GetProperty("A");
+                            var dirProp = spiralType.GetProperty("Direction");
+                            if (radiusInProp != null) radiusIn = (double)radiusInProp.GetValue(spiralSubEntity);
+                            if (radiusOutProp != null) radiusOut = (double)radiusOutProp.GetValue(spiralSubEntity);
+                            if (aProp != null) spiralA = (double)aProp.GetValue(spiralSubEntity);
+                            if (dirProp != null) spiralDirection = dirProp.GetValue(spiralSubEntity).ToString();
+                        }
+                        catch { }
+
+                        // Strongly access SPIStation / SPI (Point3d) to avoid reflection failure
+                        try
+                        {
+                            spiralPIStation = spiralSubEntity.SPIStation; // station of spiral PI
+                            // Access SPI point via reflection (property is not directly accessible)
+                            try
+                            {
+                                // Prefer SPIPoint (actual spiral PI) over SPI (alternate point)
+                                var spiPointProp = spiralSubEntity.GetType().GetProperty("SPIPoint")
+                                                     ?? spiralSubEntity.GetType().GetProperty("SPI");
+                                if (spiPointProp != null)
+                                {
+                                    var spiPointObj = spiPointProp.GetValue(spiralSubEntity);
+                                    if (spiPointObj != null)
+                                    {
+                                        // Handle Point3d or Point2d (some builds expose SPIPoint as Point2d)
+                                        if (spiPointObj is Autodesk.AutoCAD.Geometry.Point3d p3)
+                                        {
+                                            xSPI = p3.X;
+                                            ySPI = p3.Y;
+                                            zSPI = p3.Z;
+                                            gotSPIFromAPI = true;
+                                        }
+                                        else if (spiPointObj is Autodesk.AutoCAD.Geometry.Point2d p2)
+                                        {
+                                            xSPI = p2.X;
+                                            ySPI = p2.Y;
+                                            zSPI = 0.0;
+                                            gotSPIFromAPI = true;
+                                        }
+                                        else
+                                        {
+                                            // Fallback: attempt dynamic X/Y properties
+                                            var xProp = spiPointObj.GetType().GetProperty("X");
+                                            var yProp = spiPointObj.GetType().GetProperty("Y");
+                                            if (xProp != null && yProp != null)
+                                            {
+                                                xSPI = Convert.ToDouble(xProp.GetValue(spiPointObj));
+                                                ySPI = Convert.ToDouble(yProp.GetValue(spiPointObj));
+                                                zSPI = 0.0;
+                                                gotSPIFromAPI = true;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            catch (System.Exception)
+                            {
+                                // Suppress debug in production; fallback midpoint will handle absence
+                            }
+                        }
+                        catch (System.Exception ex)
+                        {
+                            document.Add(new Paragraph($"DEBUG: Direct SPI access failed, falling back: {ex.Message}").SetFont(normalFont).SetFontSize(8));
+                        }
+                        
+                        gotSubEntityData = true;
+                    }
                 }
-                else
+                
+                if (!gotSubEntityData)
                 {
-                    AddHorizontalDataRow(document, "CS  ( ) ", FormatStation(spiral.StartStation), y1, x1, normalFont);
-                    AddHorizontalDataRow(document, "SPI ( ) ", FormatStation((spiral.StartStation + spiral.EndStation) / 2), yMid, xMid, normalFont);
-                    AddHorizontalDataRow(document, "ST  ( ) ", FormatStation(spiral.EndStation), y2, x2, normalFont);
+                    document.Add(new Paragraph("Element: Clothoid").SetFont(labelFont).SetFontSize(10));
+                    document.Add(new Paragraph("Unable to read spiral data - no SubEntity available.").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph("\n"));
+                    return;
+                }
+                
+                // Get coordinates for start and end points
+                alignment.PointLocation(startStation, 0, 0, ref x1, ref y1, ref z1);
+                alignment.PointLocation(endStation, 0, 0, ref x2, ref y2, ref z2);
+                
+                // If SPI wasn't available from API, calculate it as fallback
+                if (!gotSPIFromAPI)
+                {
+                    if (spiralPIStation == 0)
+                    {
+                        spiralPIStation = startStation + (length / 2.0);
+                    }
+                    alignment.PointLocation(spiralPIStation, 0, 0, ref xSPI, ref ySPI, ref zSPI);
                 }
 
-                document.Add(new Paragraph($"Entrance Radius: {radiusIn:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Exit Radius: {radiusOut:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Length: {spiral.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                // Determine spiral type and labels
+                bool isEntry = double.IsInfinity(radiusIn) || radiusIn == 0 || radiusIn > radiusOut;
+                string startLabel = isEntry ? "TS" : "CS";
+                string endLabel = isEntry ? "SC" : "ST";
+                double effectiveRadius = isEntry ? radiusOut : radiusIn;
+
+                // Calculate spiral properties
+                double spiralK = 0;
+                double spiralP = 0;
+                double spiralAngle = 0;
+                double longTangent = 0;
+                double shortTangent = 0;
+                double chordLength = Math.Sqrt(Math.Pow(x2 - x1, 2) + Math.Pow(y2 - y1, 2));
+                double chordDirection = Math.Atan2(y2 - y1, x2 - x1);
+                
+                if (effectiveRadius > 0 && !double.IsInfinity(effectiveRadius))
+                {
+                    spiralK = (length * length) / effectiveRadius;
+                    spiralP = (length * length) / (24.0 * effectiveRadius);
+                    spiralAngle = length / (2.0 * effectiveRadius);
+                    
+                    // Calculate tangent lengths
+                    double theta = spiralAngle;
+                    longTangent = length - (Math.Pow(length, 3) / (40 * effectiveRadius * effectiveRadius));
+                    shortTangent = (Math.Pow(length, 3) / (6 * effectiveRadius * effectiveRadius));
+                }
+
+                // Calculate tangent and radial directions at SPI
+                double tangentDirection = 0, radialDirection = 0;
+                double tempX = 0, tempY = 0, tempZ = 0;
+                alignment.PointLocation(spiralPIStation - 0.01, 0, 0, ref tempX, ref tempY, ref tempZ);
+                double x2Temp = 0, y2Temp = 0, z2Temp = 0;
+                alignment.PointLocation(spiralPIStation + 0.01, 0, 0, ref x2Temp, ref y2Temp, ref z2Temp);
+                tangentDirection = Math.Atan2(y2Temp - ySPI, x2Temp - xSPI);
+                radialDirection = tangentDirection + (Math.PI / 2.0);
+
+                // Header
+                document.Add(new Paragraph("Element: Clothoid").SetFont(labelFont).SetFontSize(10).SetBold());
+                document.Add(new Paragraph("\n").SetFontSize(3));
+
+                // Station points (use API SPI; also show fallback midpoint for verification if different)
+                AddHorizontalDataRow(document, $"{startLabel}  ( )", FormatStation(startStation), y1, x1, normalFont);
+                AddHorizontalDataRow(document, "SPI  ( )", FormatStation(spiralPIStation), ySPI, xSPI, normalFont);
+                AddHorizontalDataRow(document, $"{endLabel}  ( )", FormatStation(endStation), y2, x2, normalFont);
+                
+                // Spiral properties
+                document.Add(new Paragraph($"Entrance Radius: {(double.IsInfinity(radiusIn) || radiusIn == 0 ? "0.0000" : radiusIn.ToString("F4"))}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Exit Radius: {(double.IsInfinity(radiusOut) ? "0.0000" : radiusOut.ToString("F4"))}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Length: {length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Angle: {FormatAngleDMS(spiralAngle)} {(spiralDirection.Contains("Right") ? "Right" : "Left")}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Constant: {spiralK:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Long Tangent: {longTangent:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Short Tangent: {shortTangent:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Long Chord: {chordLength:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                
+                if (gotSubEntityData)
+                {
+                    document.Add(new Paragraph($"Xs: {totalX:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph($"Ys: {totalY:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                }
+                
+                document.Add(new Paragraph($"P: {spiralP:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"K: {spiralK:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                
+                // Directions at SPI
+                document.Add(new Paragraph($"Tangent Direction: {FormatBearingDMS(tangentDirection)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Radial Direction: {FormatBearingDMS(radialDirection)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Chord Direction: {FormatBearingDMS(chordDirection)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                // Removed duplicate start/end tangent & radial directions per Clothoid template simplification
+                
                 document.Add(new Paragraph("\n").SetFontSize(5));
             }
             catch (System.Exception ex)
@@ -3273,14 +3632,44 @@ namespace GeoTableReports
             {
                 int startRow = row;
 
+                // Try to get additional properties from AlignmentSubEntitySpiral
+                double radiusIn = spiral.RadiusIn;
+                double radiusOut = spiral.RadiusOut;
+                double length = spiral.Length;
+                double startStation = spiral.StartStation;
+                double endStation = spiral.EndStation;
+                double startDirection = spiral.StartDirection;
+
+                bool gotFromSubEntity = false;
+                try
+                {
+                    if (spiral.SubEntityCount > 0)
+                    {
+                        var subEntity = spiral[0];
+                        if (subEntity is AlignmentSubEntitySpiral)
+                        {
+                            var subEntitySpiral = subEntity as AlignmentSubEntitySpiral;
+
+                            // Extract properties from sub-entity
+                            radiusIn = subEntitySpiral.RadiusIn;
+                            radiusOut = subEntitySpiral.RadiusOut;
+                            length = subEntitySpiral.Length;
+
+                            gotFromSubEntity = true;
+                        }
+                    }
+                }
+                catch { }
+
                 double x1 = 0, y1 = 0, z1 = 0;
                 double x2 = 0, y2 = 0, z2 = 0;
-                alignment.PointLocation(spiral.StartStation, 0, 0, ref x1, ref y1, ref z1);
-                alignment.PointLocation(spiral.EndStation, 0, 0, ref x2, ref y2, ref z2);
+                alignment.PointLocation(startStation, 0, 0, ref x1, ref y1, ref z1);
+                alignment.PointLocation(endStation, 0, 0, ref x2, ref y2, ref z2);
 
                 // Calculate spiral parameters
-                double spiralLength = spiral.Length;
-                double radius = 1000; // Default, should try to get from adjacent curve
+                double spiralLength = length;
+                // Use actual radius from spiral if available, otherwise default
+                double radius = radiusOut > 0 ? radiusOut : (radiusIn > 0 ? radiusIn : 1000);
                 double theta = CalculateSpiralAngle(spiralLength, radius);
                 double xs = CalculateSpiralX(spiralLength, theta);
                 double ys = CalculateSpiralY(spiralLength, theta);
@@ -3288,10 +3677,10 @@ namespace GeoTableReports
                 double k = spiralLength / 2.0;  // Simplified
 
                 // Row 1: TS/ST
-                ws.Cells[row, 1].Value = "SPIRAL";
+                ws.Cells[row, 1].Value = gotFromSubEntity ? "SPIRAL (SubEntity)" : "SPIRAL";
                 ws.Cells[row, 3].Value = "TS";
-                ws.Cells[row, 4].Value = FormatStation(spiral.StartStation);
-                ws.Cells[row, 5].Value = FormatBearingDMS(spiral.StartDirection);
+                ws.Cells[row, 4].Value = FormatStation(startStation);
+                ws.Cells[row, 5].Value = FormatBearingDMS(startDirection);
                 ws.Cells[row, 6].Value = y1;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
                 ws.Cells[row, 7].Value = x1;
@@ -3321,7 +3710,7 @@ namespace GeoTableReports
 
                 // Row 2: Parameters - merge empty cell (column 5)
                 ws.Cells[row, 3].Value = "ST";
-                ws.Cells[row, 4].Value = FormatStation(spiral.EndStation);
+                ws.Cells[row, 4].Value = FormatStation(endStation);
                 ws.Cells[row, 5].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 6].Value = y2;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
@@ -3759,940 +4148,748 @@ namespace GeoTableReports
         {
             if (spiral == null) return;
 
-            double spiralLength = spiral.Length;
-            double spiralRadius = 1000; // Default
-            double theta = CalculateSpiralAngle(spiralLength, spiralRadius);
-            double xs = CalculateSpiralX(spiralLength, spiralRadius);
-            double ys = CalculateSpiralY(spiralLength, spiralRadius);
-            double p = spiralLength * spiralLength / (6.0 * spiralRadius);
-            double k = spiralLength - (spiralLength * spiralLength * spiralLength) / (40.0 * spiralRadius * spiralRadius);
-
-            double x1 = 0, y1 = 0, z1 = 0, x2 = 0, y2 = 0, z2 = 0;
-            alignment.PointLocation(spiral.StartStation, 0, 0, ref x1, ref y1, ref z1);
-            alignment.PointLocation(spiral.EndStation, 0, 0, ref x2, ref y2, ref z2);
-
-            // Row 1: TS
-            table.AddCell(new iText.Layout.Element.Cell(2, 1).Add(new Paragraph("SPIRAL").SetFont(font).SetFontSize(8))
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
-                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
-            table.AddCell(new iText.Layout.Element.Cell(2, 1).Add(new Paragraph("").SetFont(font).SetFontSize(8))
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
-            table.AddCell(CreateDataCell("TS", font));
-            table.AddCell(CreateDataCell(FormatStation(spiral.StartStation), font));
-            table.AddCell(CreateDataCell("", font));
-            table.AddCell(CreateDataCell($"{y1:F4}", font));
-            table.AddCell(CreateDataCell($"{x1:F4}", font));
-
-            // DATA row 1 - no inside borders, left and top border only
-            table.AddCell(CreateDataCellNoBorder($"θs = {FormatAngleDMS(theta)}", font)
-                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(CreateDataCellNoBorder($"Ls= {FormatDistanceFeet(spiralLength)}", font)
-                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(CreateDataCellNoBorder($"LT= {FormatDistanceFeet(spiralLength * 0.67)}", font)
-                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(CreateDataCellNoBorder($"STs= {FormatDistanceFeet(spiralLength * 0.33)}", font)
-                .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-
-            // Row 2: ST
-            table.AddCell(CreateDataCell("ST", font));
-            table.AddCell(CreateDataCell(FormatStation(spiral.EndStation), font));
-            table.AddCell(CreateDataCell("", font));
-            table.AddCell(CreateDataCell($"{y2:F4}", font));
-            table.AddCell(CreateDataCell($"{x2:F4}", font));
-
-            // DATA row 2 - no inside borders, left and bottom border only
-            table.AddCell(CreateDataCellNoBorder($"Xs= {FormatDistanceFeet(xs)}", font)
-                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(CreateDataCellNoBorder($"Ys= {FormatDistanceFeet(ys)}", font)
-                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(CreateDataCellNoBorder($"P= {FormatDistanceFeet(p)}", font)
-                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(CreateDataCellNoBorder($"K= {FormatDistanceFeet(k)}", font)
-                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-        }
-
-    }
-
-    /// <summary>
-    /// Enhanced report selection form with multiple format options
-    /// </summary>
-    public class ReportSelectionForm : Form
-    {
-        public string ReportType { get; private set; }
-        public string OutputPath { get; private set; }
-
-        // Alignment Reports (Detailed)
-        public bool GenerateAlignmentPDF { get; private set; }
-        public bool GenerateAlignmentTXT { get; private set; }
-        public bool GenerateAlignmentXML { get; private set; }
-
-        // GeoTable Reports (GLTT Standard)
-        public bool GenerateGeoTablePDF { get; private set; }
-        public bool GenerateGeoTableEXCEL { get; private set; }
-
-        private RadioButton rbVertical;
-        private RadioButton rbHorizontal;
-        private TextBox txtOutputPath;
-        private Button btnBrowse;
-
-        // Alignment Report checkboxes
-        private CheckBox chkAlignmentPDF;
-        private CheckBox chkAlignmentTXT;
-        private CheckBox chkAlignmentXML;
-
-        // GeoTable Report checkboxes
-        private CheckBox chkGeoTablePDF;
-        private CheckBox chkGeoTableEXCEL;
-
-        private Button btnSelectAllAlignment;
-        private Button btnSelectAllGeoTable;
-        private Button btnOK;
-        private Button btnCancel;
-        private GroupBox grpReportType;
-        private GroupBox grpAlignmentReports;
-        private GroupBox grpGeoTableReports;
-
-        public ReportSelectionForm()
-        {
-            InitializeComponents();
-        }
-
-        private void InitializeComponents()
-        {
-            this.Text = "Generate Track Geometry Reports";
-            this.Size = new System.Drawing.Size(550, 550);
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-
-            // Report Type Group
-            grpReportType = new GroupBox
-            {
-                Text = "Report Type",
-                Location = new System.Drawing.Point(20, 20),
-                Size = new System.Drawing.Size(490, 80)
-            };
-            this.Controls.Add(grpReportType);
-
-            rbVertical = new RadioButton
-            {
-                Text = "Vertical Profile",
-                Location = new System.Drawing.Point(20, 25),
-                Checked = false,
-                AutoSize = true
-            };
-            rbHorizontal = new RadioButton
-            {
-                Text = "Horizontal Alignment",
-                Location = new System.Drawing.Point(20, 50),
-                Checked = true,
-                AutoSize = true
-            };
-            grpReportType.Controls.Add(rbVertical);
-            grpReportType.Controls.Add(rbHorizontal);
-
-            // Alignment Reports Group (Detailed)
-            grpAlignmentReports = new GroupBox
-            {
-                Text = "Alignment Reports (Detailed Multi-Page Format)",
-                Location = new System.Drawing.Point(20, 110),
-                Size = new System.Drawing.Size(490, 130)
-            };
-            this.Controls.Add(grpAlignmentReports);
-
-            chkAlignmentPDF = new CheckBox
-            {
-                Text = "PDF - Detailed alignment report with full geometry",
-                Location = new System.Drawing.Point(20, 25),
-                Checked = true,
-                AutoSize = true
-            };
-            chkAlignmentTXT = new CheckBox
-            {
-                Text = "TXT - Plain text format",
-                Location = new System.Drawing.Point(20, 50),
-                Checked = false,
-                AutoSize = true
-            };
-            chkAlignmentXML = new CheckBox
-            {
-                Text = "XML - Structured data format",
-                Location = new System.Drawing.Point(20, 75),
-                Checked = false,
-                AutoSize = true
-            };
-            grpAlignmentReports.Controls.Add(chkAlignmentPDF);
-            grpAlignmentReports.Controls.Add(chkAlignmentTXT);
-            grpAlignmentReports.Controls.Add(chkAlignmentXML);
-
-            btnSelectAllAlignment = new Button
-            {
-                Text = "Select All",
-                Location = new System.Drawing.Point(390, 25),
-                Width = 85,
-                Height = 25
-            };
-            btnSelectAllAlignment.Click += BtnSelectAllAlignment_Click;
-            grpAlignmentReports.Controls.Add(btnSelectAllAlignment);
-
-            // GeoTable Reports Group (GLTT Standard)
-            grpGeoTableReports = new GroupBox
-            {
-                Text = "GeoTable Reports (GLTT Standard Compact Table Format)",
-                Location = new System.Drawing.Point(20, 250),
-                Size = new System.Drawing.Size(490, 105)
-            };
-            this.Controls.Add(grpGeoTableReports);
-
-            chkGeoTablePDF = new CheckBox
-            {
-                Text = "PDF - GeoTable format (compact table)",
-                Location = new System.Drawing.Point(20, 25),
-                Checked = true,
-                AutoSize = true
-            };
-            chkGeoTableEXCEL = new CheckBox
-            {
-                Text = "EXCEL - GeoTable format (.xlsx)",
-                Location = new System.Drawing.Point(20, 50),
-                Checked = true,
-                AutoSize = true
-            };
-            grpGeoTableReports.Controls.Add(chkGeoTablePDF);
-            grpGeoTableReports.Controls.Add(chkGeoTableEXCEL);
-
-            btnSelectAllGeoTable = new Button
-            {
-                Text = "Select All",
-                Location = new System.Drawing.Point(390, 25),
-                Width = 85,
-                Height = 25
-            };
-            btnSelectAllGeoTable.Click += BtnSelectAllGeoTable_Click;
-            grpGeoTableReports.Controls.Add(btnSelectAllGeoTable);
-
-            // Output Path
-            var lblOutput = new System.Windows.Forms.Label
-            {
-                Text = "Output Location:",
-                Location = new System.Drawing.Point(20, 370),
-                AutoSize = true
-            };
-            this.Controls.Add(lblOutput);
-
-            txtOutputPath = new TextBox
-            {
-                Location = new System.Drawing.Point(20, 395),
-                Width = 390,
-                Height = 25
-            };
-            txtOutputPath.Text = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "track_geometry_report"
-            );
-            this.Controls.Add(txtOutputPath);
-
-            btnBrowse = new Button
-            {
-                Text = "Browse...",
-                Location = new System.Drawing.Point(420, 393),
-                Width = 90,
-                Height = 28
-            };
-            btnBrowse.Click += BtnBrowse_Click;
-            this.Controls.Add(btnBrowse);
-
-            // Action Buttons
-            btnOK = new Button
-            {
-                Text = "Generate",
-                Location = new System.Drawing.Point(320, 440),
-                Width = 85,
-                Height = 30,
-                DialogResult = DialogResult.OK
-            };
-            btnOK.Click += BtnOK_Click;
-            this.Controls.Add(btnOK);
-
-            btnCancel = new Button
-            {
-                Text = "Cancel",
-                Location = new System.Drawing.Point(420, 440),
-                Width = 90,
-                Height = 28,
-                DialogResult = DialogResult.Cancel
-            };
-            this.Controls.Add(btnCancel);
-
-            this.AcceptButton = btnOK;
-            this.CancelButton = btnCancel;
-
-            // Add tooltips
-            var toolTip = new ToolTip();
-            toolTip.SetToolTip(chkAlignmentPDF, "Detailed multi-page alignment report with complete geometry calculations");
-            toolTip.SetToolTip(chkAlignmentTXT, "Plain text version of detailed alignment report");
-            toolTip.SetToolTip(chkAlignmentXML, "Machine-readable XML format with structured alignment data");
-            toolTip.SetToolTip(chkGeoTablePDF, "Compact table format matching GLTT standard specifications");
-            toolTip.SetToolTip(chkGeoTableEXCEL, "GLTT standard Excel format with proper column structure and merged cells");
-            toolTip.SetToolTip(txtOutputPath, "Base path for output files. Extensions will be added based on selected formats.");
-        }
-
-        private void BtnSelectAllAlignment_Click(object sender, EventArgs e)
-        {
-            chkAlignmentPDF.Checked = true;
-            chkAlignmentTXT.Checked = true;
-            chkAlignmentXML.Checked = true;
-        }
-
-        private void BtnSelectAllGeoTable_Click(object sender, EventArgs e)
-        {
-            chkGeoTablePDF.Checked = true;
-            chkGeoTableEXCEL.Checked = true;
-        }
-
-        private void BtnBrowse_Click(object sender, EventArgs e)
-        {
-            using (System.Windows.Forms.SaveFileDialog dialog = new System.Windows.Forms.SaveFileDialog())
-            {
-                dialog.Filter = "All Formats|*.*|PDF Files (*.pdf)|*.pdf|Excel Files (*.xlsx)|*.xlsx|Text Files (*.txt)|*.txt|XML Files (*.xml)|*.xml";
-                dialog.FilterIndex = 1;
-                dialog.FileName = "track_geometry_report";
-                dialog.Title = "Select Output Location";
-
-                if (dialog.ShowDialog() == DialogResult.OK)
-                {
-                    // Remove extension if provided, we'll add appropriate ones based on selection
-                    txtOutputPath.Text = System.IO.Path.Combine(
-                        System.IO.Path.GetDirectoryName(dialog.FileName),
-                        System.IO.Path.GetFileNameWithoutExtension(dialog.FileName)
-                    );
-                }
-            }
-        }
-
-        private void BtnOK_Click(object sender, EventArgs e)
-        {
-            // Validate at least one format is selected
-            bool hasAlignmentReport = chkAlignmentPDF.Checked || chkAlignmentTXT.Checked || chkAlignmentXML.Checked;
-            bool hasGeoTableReport = chkGeoTablePDF.Checked || chkGeoTableEXCEL.Checked;
-
-            if (!hasAlignmentReport && !hasGeoTableReport)
-            {
-                MessageBox.Show(
-                    "Please select at least one output format.",
-                    "No Format Selected",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                );
-                this.DialogResult = DialogResult.None;
-                return;
-            }
-
-            // Validate output path
-            if (string.IsNullOrWhiteSpace(txtOutputPath.Text))
-            {
-                MessageBox.Show(
-                    "Please specify an output location.",
-                    "No Output Location",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                );
-                this.DialogResult = DialogResult.None;
-                return;
-            }
-
-            ReportType = rbVertical.Checked ? "Vertical" : "Horizontal";
-            OutputPath = txtOutputPath.Text;
-
-            // Alignment Reports
-            GenerateAlignmentPDF = chkAlignmentPDF.Checked;
-            GenerateAlignmentTXT = chkAlignmentTXT.Checked;
-            GenerateAlignmentXML = chkAlignmentXML.Checked;
-
-            // GeoTable Reports
-            GenerateGeoTablePDF = chkGeoTablePDF.Checked;
-            GenerateGeoTableEXCEL = chkGeoTableEXCEL.Checked;
-        }
-    }
-
-    /// <summary>
-    /// Batch process form
-    /// </summary>
-    public class BatchProcessForm : Form
-    {
-        public string OutputFolder { get; private set; }
-        public bool IncludeVertical { get; private set; }
-        public bool IncludeHorizontal { get; private set; }
-
-        private TextBox txtOutputFolder;
-        private CheckBox chkVertical;
-        private CheckBox chkHorizontal;
-        private Button btnBrowse;
-        private Button btnOK;
-        private Button btnCancel;
-
-        public BatchProcessForm()
-        {
-            InitializeComponents();
-        }
-
-        private void InitializeComponents()
-        {
-            this.Text = "Batch Process Alignments";
-            this.Size = new System.Drawing.Size(500, 200);
-            this.StartPosition = FormStartPosition.CenterScreen;
-
-            var lblFolder = new System.Windows.Forms.Label { Text = "Output Folder:", Location = new System.Drawing.Point(20, 20), AutoSize = true };
-            this.Controls.Add(lblFolder);
-
-            txtOutputFolder = new TextBox { Location = new System.Drawing.Point(20, 40), Width = 350 };
-            txtOutputFolder.Text = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            this.Controls.Add(txtOutputFolder);
-
-            btnBrowse = new Button { Text = "Browse...", Location = new System.Drawing.Point(380, 38), Width = 80 };
-            btnBrowse.Click += BtnBrowse_Click;
-            this.Controls.Add(btnBrowse);
-
-            var lblTypes = new System.Windows.Forms.Label { Text = "Report Types:", Location = new System.Drawing.Point(20, 75), AutoSize = true };
-            this.Controls.Add(lblTypes);
-
-            chkVertical = new CheckBox { Text = "Vertical Profile", Location = new System.Drawing.Point(40, 100), Checked = true, AutoSize = true };
-            chkHorizontal = new CheckBox { Text = "Horizontal Alignment", Location = new System.Drawing.Point(40, 125), Checked = true, AutoSize = true };
-            this.Controls.Add(chkVertical);
-            this.Controls.Add(chkHorizontal);
-
-            btnOK = new Button { Text = "OK", Location = new System.Drawing.Point(300, 130), Width = 75, DialogResult = DialogResult.OK };
-            btnOK.Click += BtnOK_Click;
-            this.Controls.Add(btnOK);
-
-            btnCancel = new Button { Text = "Cancel", Location = new System.Drawing.Point(385, 130), Width = 75, DialogResult = DialogResult.Cancel };
-            this.Controls.Add(btnCancel);
-
-            this.AcceptButton = btnOK;
-            this.CancelButton = btnCancel;
-        }
-
-        private void BtnBrowse_Click(object sender, EventArgs e)
-        {
-            using (FolderBrowserDialog dialog = new FolderBrowserDialog())
-            {
-                dialog.Description = "Select output folder for reports";
-                dialog.SelectedPath = txtOutputFolder.Text;
-
-                if (dialog.ShowDialog() == DialogResult.OK)
-                {
-                    txtOutputFolder.Text = dialog.SelectedPath;
-                }
-            }
-        }
-
-        private void BtnOK_Click(object sender, EventArgs e)
-        {
-            OutputFolder = txtOutputFolder.Text;
-            IncludeVertical = chkVertical.Checked;
-            IncludeHorizontal = chkHorizontal.Checked;
-        }
-    }
-
-    /// <summary>
-    /// User control for the report panel
-    /// </summary>
-    public class ReportPanelControl : UserControl
-    {
-        private GroupBox grpReportType;
-        private RadioButton rbVertical;
-        private RadioButton rbHorizontal;
-
-        private GroupBox grpOutputFormat;
-        private CheckBox chkPDF;
-        private CheckBox chkTXT;
-        private CheckBox chkXML;
-        private Button btnSelectAllFormats;
-
-        private GroupBox grpOutputLocation;
-        private TextBox txtOutputPath;
-        private Button btnBrowse;
-
-        private GroupBox grpActions;
-        private Button btnGenerate;
-        private Button btnBatchProcess;
-
-        private System.Windows.Forms.Label lblStatus;
-        private ProgressBar progressBar;
-
-        public ReportPanelControl()
-        {
-            InitializeComponents();
-        }
-
-        private void InitializeComponents()
-        {
-            this.SuspendLayout();
-
-            // Set control properties
-            this.BackColor = System.Drawing.SystemColors.Control;
-            this.AutoScroll = true;
-            this.Padding = new Padding(10);
-
-            int yPos = 10;
-
-            // Report Type Group
-            grpReportType = new GroupBox
-            {
-                Text = "Report Type",
-                Location = new System.Drawing.Point(10, yPos),
-                Width = 320,
-                Height = 80
-            };
-
-            rbVertical = new RadioButton
-            {
-                Text = "Vertical Profile",
-                Location = new System.Drawing.Point(15, 25),
-                Checked = true,
-                Width = 280
-            };
-
-            rbHorizontal = new RadioButton
-            {
-                Text = "Horizontal Alignment",
-                Location = new System.Drawing.Point(15, 50),
-                Width = 280
-            };
-
-            grpReportType.Controls.Add(rbVertical);
-            grpReportType.Controls.Add(rbHorizontal);
-            this.Controls.Add(grpReportType);
-
-            yPos += 90;
-
-            // Output Format Group
-            grpOutputFormat = new GroupBox
-            {
-                Text = "Output Format",
-                Location = new System.Drawing.Point(10, yPos),
-                Width = 320,
-                Height = 130
-            };
-
-            chkPDF = new CheckBox
-            {
-                Text = "PDF (Portable Document Format)",
-                Location = new System.Drawing.Point(15, 25),
-                Checked = true,
-                Width = 290
-            };
-
-            chkTXT = new CheckBox
-            {
-                Text = "TXT (Plain Text)",
-                Location = new System.Drawing.Point(15, 50),
-                Width = 290
-            };
-
-            chkXML = new CheckBox
-            {
-                Text = "XML (Extensible Markup Language)",
-                Location = new System.Drawing.Point(15, 75),
-                Width = 290
-            };
-
-            btnSelectAllFormats = new Button
-            {
-                Text = "Select All",
-                Location = new System.Drawing.Point(200, 100),
-                Width = 100,
-                Height = 25
-            };
-            btnSelectAllFormats.Click += BtnSelectAllFormats_Click;
-
-            grpOutputFormat.Controls.Add(chkPDF);
-            grpOutputFormat.Controls.Add(chkTXT);
-            grpOutputFormat.Controls.Add(chkXML);
-            grpOutputFormat.Controls.Add(btnSelectAllFormats);
-            this.Controls.Add(grpOutputFormat);
-
-            yPos += 140;
-
-            // Output Location Group
-            grpOutputLocation = new GroupBox
-            {
-                Text = "Output Location",
-                Location = new System.Drawing.Point(10, yPos),
-                Width = 320,
-                Height = 80
-            };
-
-            txtOutputPath = new TextBox
-            {
-                Location = new System.Drawing.Point(15, 25),
-                Width = 290,
-                Text = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                    "alignment_report"
-                )
-            };
-
-            btnBrowse = new Button
-            {
-                Text = "Browse...",
-                Location = new System.Drawing.Point(15, 50),
-                Width = 100,
-                Height = 25
-            };
-            btnBrowse.Click += BtnBrowse_Click;
-
-            grpOutputLocation.Controls.Add(txtOutputPath);
-            grpOutputLocation.Controls.Add(btnBrowse);
-            this.Controls.Add(grpOutputLocation);
-
-            yPos += 90;
-
-            // Actions Group
-            grpActions = new GroupBox
-            {
-                Text = "Actions",
-                Location = new System.Drawing.Point(10, yPos),
-                Width = 320,
-                Height = 90
-            };
-
-            btnGenerate = new Button
-            {
-                Text = "Generate Report",
-                Location = new System.Drawing.Point(15, 25),
-                Width = 290,
-                Height = 30,
-                BackColor = System.Drawing.Color.FromArgb(0, 120, 215),
-                ForeColor = System.Drawing.Color.White,
-                FlatStyle = FlatStyle.Flat
-            };
-            btnGenerate.Click += BtnGenerate_Click;
-
-            btnBatchProcess = new Button
-            {
-                Text = "Batch Process All Alignments",
-                Location = new System.Drawing.Point(15, 58),
-                Width = 290,
-                Height = 25
-            };
-            btnBatchProcess.Click += BtnBatchProcess_Click;
-
-            grpActions.Controls.Add(btnGenerate);
-            grpActions.Controls.Add(btnBatchProcess);
-            this.Controls.Add(grpActions);
-
-            yPos += 100;
-
-            // Status Label
-            lblStatus = new System.Windows.Forms.Label
-            {
-                Text = "Ready",
-                Location = new System.Drawing.Point(10, yPos),
-                Width = 320,
-                Height = 20,
-                TextAlign = System.Drawing.ContentAlignment.MiddleLeft
-            };
-            this.Controls.Add(lblStatus);
-
-            yPos += 25;
-
-            // Progress Bar
-            progressBar = new ProgressBar
-            {
-                Location = new System.Drawing.Point(10, yPos),
-                Width = 320,
-                Height = 20,
-                Visible = false
-            };
-            this.Controls.Add(progressBar);
-
-            // Set tooltip
-            var toolTip = new ToolTip();
-            toolTip.SetToolTip(chkPDF, "Professional, printable PDF format");
-            toolTip.SetToolTip(chkTXT, "Simple, editable plain text format");
-            toolTip.SetToolTip(chkXML, "Structured data format for processing");
-            toolTip.SetToolTip(btnGenerate, "Select an alignment and generate report(s)");
-            toolTip.SetToolTip(btnBatchProcess, "Process all alignments in the drawing");
-
-            this.ResumeLayout(false);
-        }
-
-        private void BtnSelectAllFormats_Click(object sender, EventArgs e)
-        {
-            chkPDF.Checked = true;
-            chkTXT.Checked = true;
-            chkXML.Checked = true;
-        }
-
-        private void BtnBrowse_Click(object sender, EventArgs e)
-        {
-            using (System.Windows.Forms.SaveFileDialog dialog = new System.Windows.Forms.SaveFileDialog())
-            {
-                dialog.Filter = "All Formats|*.*";
-                dialog.FilterIndex = 1;
-                dialog.FileName = "alignment_report";
-                dialog.Title = "Select Output Location";
-
-                if (dialog.ShowDialog() == DialogResult.OK)
-                {
-                    txtOutputPath.Text = System.IO.Path.Combine(
-                        System.IO.Path.GetDirectoryName(dialog.FileName),
-                        System.IO.Path.GetFileNameWithoutExtension(dialog.FileName)
-                    );
-                }
-            }
-        }
-
-        private void BtnGenerate_Click(object sender, EventArgs e)
-        {
-            // Validate at least one format is selected
-            if (!chkPDF.Checked && !chkTXT.Checked && !chkXML.Checked)
-            {
-                MessageBox.Show(
-                    "Please select at least one output format.",
-                    "No Format Selected",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                );
-                return;
-            }
-
-            // Validate output path
-            if (string.IsNullOrWhiteSpace(txtOutputPath.Text))
-            {
-                MessageBox.Show(
-                    "Please specify an output location.",
-                    "No Output Location",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                );
-                return;
-            }
-
             try
             {
-                lblStatus.Text = "Prompting for alignment selection...";
-                AcApp.Document doc = AcApp.Application.DocumentManager.MdiActiveDocument;
-                Editor ed = doc.Editor;
+                // Get coordinates and properties
+                double radiusIn = spiral.RadiusIn;
+                double radiusOut = spiral.RadiusOut;
+                double length = spiral.Length;
+                double startStation = spiral.StartStation;
+                double endStation = spiral.EndStation;
+                double spiralA = spiral.A;
+                string spiralDirection = spiral.Direction.ToString();
+                
+                double totalX = 0, totalY = 0, delta = 0;
+                bool gotSubEntityData = false;
 
-                // Prompt user to select alignment
-                PromptEntityOptions options = new PromptEntityOptions("\nSelect alignment: ");
-                options.SetRejectMessage("\nMust be an alignment.");
-                options.AddAllowedClass(typeof(Alignment), true);
-                PromptEntityResult result = ed.GetEntity(options);
-
-                if (result.Status != PromptStatus.OK)
+                // Try to get additional properties from AlignmentSubEntitySpiral
+                try
                 {
-                    lblStatus.Text = "Cancelled - no alignment selected";
-                    return;
+                    if (spiral.SubEntityCount > 0)
+                    {
+                        var subEntity = spiral[0];
+                        if (subEntity is AlignmentSubEntitySpiral)
+                        {
+                            var subEntitySpiral = subEntity as AlignmentSubEntitySpiral;
+                            totalX = subEntitySpiral.TotalX;
+                            totalY = subEntitySpiral.TotalY;
+                            delta = subEntitySpiral.Delta;
+                            gotSubEntityData = true;
+                        }
+                    }
+                }
+                catch { }
+
+                // Determine spiral type and effective radius
+                bool isEntry = double.IsInfinity(radiusIn) || radiusIn == 0 || radiusIn > radiusOut;
+                string startLabel = isEntry ? "TS" : "CS";
+                string endLabel = isEntry ? "SC" : "ST";
+                double effectiveRadius = isEntry ? radiusOut : radiusIn;
+
+                // Get point coordinates
+                double x1 = 0, y1 = 0, z1 = 0;
+                double x2 = 0, y2 = 0, z2 = 0;
+                double xSPI = 0, ySPI = 0, zSPI = 0;
+                
+                alignment.PointLocation(startStation, 0, 0, ref x1, ref y1, ref z1);
+                alignment.PointLocation(endStation, 0, 0, ref x2, ref y2, ref z2);
+                
+                double spiralPIStation = startStation + (length / 2.0);
+                alignment.PointLocation(spiralPIStation, 0, 0, ref xSPI, ref ySPI, ref zSPI);
+
+                // Calculate spiral parameters
+                double spiralK = 0, spiralP = 0, spiralAngle = 0;
+                double longTangent = 0, shortTangent = 0;
+                double chordLength = Math.Sqrt(Math.Pow(x2 - x1, 2) + Math.Pow(y2 - y1, 2));
+                
+                if (effectiveRadius > 0 && !double.IsInfinity(effectiveRadius))
+                {
+                    spiralK = (length * length) / effectiveRadius;
+                    spiralP = (length * length) / (24.0 * effectiveRadius);
+                    spiralAngle = length / (2.0 * effectiveRadius);
+                    longTangent = gotSubEntityData ? totalX : (length - (Math.Pow(length, 3) / (40 * effectiveRadius * effectiveRadius)));
+                    shortTangent = gotSubEntityData ? totalY : ((Math.Pow(length, 3) / (6 * effectiveRadius * effectiveRadius)));
                 }
 
-                ObjectId alignmentId = result.ObjectId;
-                string reportType = rbVertical.Checked ? "Vertical" : "Horizontal";
-                string baseOutputPath = txtOutputPath.Text;
+                // Calculate directions
+                double x0 = 0, y0 = 0, z0 = 0, x3 = 0, y3 = 0, z3 = 0;
+                alignment.PointLocation(startStation - 0.01, 0, 0, ref x0, ref y0, ref z0);
+                alignment.PointLocation(endStation + 0.01, 0, 0, ref x3, ref y3, ref z3);
+                
+                double tangentDirStart = Math.Atan2(y1 - y0, x1 - x0);
+                double chordDirection = Math.Atan2(y2 - y1, x2 - x1);
+                double tangentDirEnd = Math.Atan2(y3 - y2, x3 - x2);
+                double radialDirSPI = chordDirection + (Math.PI / 2.0);
 
-                lblStatus.Text = "Generating report(s)...";
-                progressBar.Visible = true;
-                progressBar.Style = ProgressBarStyle.Marquee;
+                // Table rows for spiral
+                // Row 1: Start point (TS or CS)
+                table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph("SPIRAL").SetFont(font).SetFontSize(8))
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                    .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
+                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
+                table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph("").SetFont(font).SetFontSize(8))
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
+                    
+                table.AddCell(CreateDataCell(startLabel, font));
+                table.AddCell(CreateDataCell(FormatStation(startStation), font));
+                table.AddCell(CreateDataCell(FormatBearingDMS(tangentDirStart), font));
+                table.AddCell(CreateDataCell($"{y1:F4}", font));
+                table.AddCell(CreateDataCell($"{x1:F4}", font));
 
-                // Generate reports
-                using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+                // DATA row 1
+                table.AddCell(CreateDataCellNoBorder($"R In= {(double.IsInfinity(radiusIn) || radiusIn == 0 ? "0.000'" : FormatDistanceFeet(radiusIn))}", font)
+                    .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                    .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                table.AddCell(CreateDataCellNoBorder($"R Out= {FormatDistanceFeet(effectiveRadius)}", font)
+                    .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                table.AddCell(CreateDataCellNoBorder($"Ls= {FormatDistanceFeet(length)}", font)
+                    .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                table.AddCell(CreateDataCellNoBorder($"θs= {FormatAngleDMS(spiralAngle)} {(spiralDirection.Contains("Right") ? "R" : "L")}", font)
+                    .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                    .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+
+                // Row 2: SPI
+                table.AddCell(CreateDataCell("SPI", font));
+                table.AddCell(CreateDataCell(FormatStation(spiralPIStation), font));
+                table.AddCell(CreateDataCell("", font));
+                table.AddCell(CreateDataCell($"{ySPI:F4}", font));
+                table.AddCell(CreateDataCell($"{xSPI:F4}", font));
+
+                // DATA row 2
+                table.AddCell(CreateDataCellNoBorder($"K= {spiralK:F4}", font)
+                    .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                table.AddCell(CreateDataCellNoBorder($"LT= {FormatDistanceFeet(longTangent)}", font));
+                table.AddCell(CreateDataCellNoBorder($"ST= {FormatDistanceFeet(shortTangent)}", font));
+                table.AddCell(CreateDataCellNoBorder($"LC= {FormatDistanceFeet(chordLength)}", font)
+                    .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+
+                // Row 3: End point (SC or ST)
+                table.AddCell(CreateDataCell(endLabel, font));
+                table.AddCell(CreateDataCell(FormatStation(endStation), font));
+                table.AddCell(CreateDataCell(FormatBearingDMS(tangentDirEnd), font));
+                table.AddCell(CreateDataCell($"{y2:F4}", font));
+                table.AddCell(CreateDataCell($"{x2:F4}", font));
+
+                // DATA row 3
+                table.AddCell(CreateDataCellNoBorder($"Xs= {(gotSubEntityData ? totalX.ToString("F4") : "N/A")}", font)
+                    .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                    .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                table.AddCell(CreateDataCellNoBorder($"Ys= {(gotSubEntityData ? totalY.ToString("F4") : "N/A")}", font)
+                    .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                table.AddCell(CreateDataCellNoBorder($"P= {spiralP:F4}", font)
+                    .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                table.AddCell(CreateDataCellNoBorder($"Chord: {FormatBearingDMS(chordDirection)}", font)
+                    .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                    .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            }
+            catch (System.Exception ex)
+            {
+                // Add error row
+                table.AddCell(new iText.Layout.Element.Cell(1, 2).Add(new Paragraph("SPIRAL ERROR").SetFont(font).SetFontSize(8))
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
+                table.AddCell(new iText.Layout.Element.Cell(1, 5).Add(new Paragraph($"Error: {ex.Message}").SetFont(font).SetFontSize(7))
+                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
+            }
+        }
+
+    }
+
+    // Dedicated 2025 report selection dialog to avoid cross-version ambiguity
+    // Preview DTO for snippet-based live preview
+    public class AlignmentPreviewData
+    {
+        public string AlignmentName = string.Empty;
+        public string Description = string.Empty;
+        public string StyleName = string.Empty;
+        public double StartStation = 0;
+        public double EndStation = 0;
+        public int LineCount = 0;
+        public int ArcCount = 0;
+        public int SpiralCount = 0;
+        public string ProfileName = string.Empty;
+        public System.Collections.Generic.List<string> HorizontalSampleLines = new System.Collections.Generic.List<string>();
+        public System.Collections.Generic.List<string> VerticalSampleLines = new System.Collections.Generic.List<string>();
+    }
+
+    public class ReportSelectionForm2025 : Form
+    {
+        private AlignmentPreviewData previewData; // injected preview metadata & sample lines
+        // (Viewer fields removed)
+        private ComboBox reportTypeComboBox;
+        private TextBox outputPathTextBox;
+        private Button browseButton;
+        private CheckBox chkAlignmentPdf;
+        private CheckBox chkAlignmentTxt;
+        private CheckBox chkAlignmentXml;
+        private CheckBox chkGeoTablePdf;
+        private CheckBox chkGeoTableExcel;
+        private Button okButton;
+        private Button cancelButton;
+        // Functional enhancement controls placeholders (phase 2)
+        private Button btnSelectAll;
+        private Button btnSelectNone;
+        private Button btnSelectRecommended;
+        private CheckBox chkRemember;
+        private CheckBox chkOpenFolder;
+        private CheckBox chkOpenFiles;
+        private CheckBox chkLivePreview;
+        private TextBox previewBox;
+        private System.Windows.Forms.Label lblPathStatus;
+        private ToolTip toolTip;
+        private string settingsFilePath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GeoTableReports", "dialog_prefs.json");
+
+        public string ReportType { get; private set; } = "Horizontal";
+        public string OutputPath { get; private set; } = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "GeoTable_Report");
+        public bool GenerateAlignmentPDF => chkAlignmentPdf.Checked;
+        public bool GenerateAlignmentTXT => chkAlignmentTxt.Checked;
+        public bool GenerateAlignmentXML => chkAlignmentXml.Checked;
+        public bool GenerateGeoTablePDF => chkGeoTablePdf.Checked;
+        public bool GenerateGeoTableEXCEL => chkGeoTableExcel.Checked;
+        // Future properties (inactive until wiring complete)
+        public bool OpenFolderAfter => chkOpenFolder?.Checked == true;
+        public bool OpenFilesAfter => chkOpenFiles?.Checked == true;
+
+        public ReportSelectionForm2025(AlignmentPreviewData preview)
+        {
+            previewData = preview ?? new AlignmentPreviewData();
+            Text = "GeoTable Report Selection";
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            StartPosition = FormStartPosition.CenterParent;
+            Width = 700; // dialog width after viewer removal
+            Height = 500; // height retained
+
+            var lblType = new System.Windows.Forms.Label { Left = 15, Top = 15, Width = 120, Text = "Report Type:" };
+            reportTypeComboBox = new ComboBox { Left = 140, Top = 12, Width = 250, DropDownStyle = ComboBoxStyle.DropDownList }; // widened per styling improvements
+            reportTypeComboBox.Items.AddRange(new object[] { "Horizontal", "Vertical" });
+            reportTypeComboBox.SelectedIndex = 0;
+            reportTypeComboBox.SelectedIndexChanged += (s, e) => ReportType = reportTypeComboBox.SelectedItem?.ToString() ?? "Horizontal";
+
+            var lblOutput = new System.Windows.Forms.Label { Left = 15, Top = 50, Width = 120, Text = "Base Output Path:" };
+            outputPathTextBox = new TextBox { Left = 140, Top = 47, Width = 420, Text = OutputPath };
+            browseButton = new Button { Left = 565, Top = 46, Width = 55, Text = "..." };
+            browseButton.Click += (s, e) =>
+            {
+                using (var sfd = new System.Windows.Forms.SaveFileDialog())
                 {
-                    Alignment alignment = tr.GetObject(alignmentId, OpenMode.ForRead) as Alignment;
-                    if (alignment == null)
+                    sfd.Title = "Select base output file name";
+                    sfd.Filter = "All Files (*.*)|*.*";
+                    sfd.FileName = System.IO.Path.GetFileName(OutputPath);
+                    if (sfd.ShowDialog() == DialogResult.OK)
                     {
-                        lblStatus.Text = "Error: Invalid alignment";
-                        progressBar.Visible = false;
-                        return;
+                        OutputPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(sfd.FileName) ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop), System.IO.Path.GetFileNameWithoutExtension(sfd.FileName));
+                        outputPathTextBox.Text = OutputPath;
                     }
+                }
+            };
 
-                    var generatedFiles = new System.Collections.Generic.List<string>();
+            int groupTop = 95;
+            int groupHeight = 220;
+            int groupWidth = 320;
+            var grpAlignment = new GroupBox { Left = 15, Top = groupTop, Width = groupWidth, Height = groupHeight, Text = "Alignment Reports" };
+            chkAlignmentPdf = new CheckBox { Left = 15, Top = 25, Width = 160, Text = "Alignment PDF" };
+            chkAlignmentTxt = new CheckBox { Left = 15, Top = 50, Width = 160, Text = "Alignment TXT" };
+            chkAlignmentXml = new CheckBox { Left = 15, Top = 75, Width = 160, Text = "Alignment XML" };
+            grpAlignment.Controls.AddRange(new Control[] { chkAlignmentPdf, chkAlignmentTxt, chkAlignmentXml });
 
-                    // Generate PDF if requested
-                    if (chkPDF.Checked)
+            var grpGeoTable = new GroupBox { Left = 355, Top = groupTop, Width = groupWidth, Height = groupHeight, Text = "GeoTable Reports" };
+            chkGeoTablePdf = new CheckBox { Left = 15, Top = 25, Width = 160, Text = "GeoTable PDF" };
+            chkGeoTableExcel = new CheckBox { Left = 15, Top = 50, Width = 160, Text = "GeoTable Excel" };
+            grpGeoTable.Controls.AddRange(new Control[] { chkGeoTablePdf, chkGeoTableExcel });
+
+            // Divider line panel below path inputs
+            var divider = new Panel { Left = 15, Top = 80, Width = 660, Height = 1, BackColor = System.Drawing.Color.LightGray };
+
+            // Centered action buttons area (moved down to prevent overlap)
+            int buttonTop = 395;
+            okButton = new Button { Left = 250, Top = buttonTop, Width = 110, Text = "OK" };
+            cancelButton = new Button { Left = 370, Top = buttonTop, Width = 110, Text = "Cancel" };
+            var helpButton = new Button { Left = 490, Top = buttonTop, Width = 110, Text = "Help" };
+            helpButton.Click += (s, e) => System.Windows.Forms.MessageBox.Show("Help documentation coming soon.", "Help", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+
+            // Simple icon placeholders for file types (phase 1: styling)
+            System.Drawing.Color iconBack = System.Drawing.Color.FromArgb(230,230,230);
+            PictureBox IconPdfAlign = new PictureBox { Left = 20, Top = 25, Width = 12, Height = 12, BackColor = iconBack, Parent = grpAlignment }; grpAlignment.Controls.Add(IconPdfAlign);
+            PictureBox IconTxtAlign = new PictureBox { Left = 20, Top = 50, Width = 12, Height = 12, BackColor = iconBack, Parent = grpAlignment }; grpAlignment.Controls.Add(IconTxtAlign);
+            PictureBox IconXmlAlign = new PictureBox { Left = 20, Top = 75, Width = 12, Height = 12, BackColor = iconBack, Parent = grpAlignment }; grpAlignment.Controls.Add(IconXmlAlign);
+            chkAlignmentPdf.Left = 40;
+            chkAlignmentTxt.Left = 40;
+            chkAlignmentXml.Left = 40;
+
+            PictureBox IconPdfGeo = new PictureBox { Left = 20, Top = 25, Width = 12, Height = 12, BackColor = iconBack, Parent = grpGeoTable }; grpGeoTable.Controls.Add(IconPdfGeo);
+            PictureBox IconXlsGeo = new PictureBox { Left = 20, Top = 50, Width = 12, Height = 12, BackColor = iconBack, Parent = grpGeoTable }; grpGeoTable.Controls.Add(IconXlsGeo);
+            chkGeoTablePdf.Left = 40;
+            chkGeoTableExcel.Left = 40;
+            okButton.Click += (s, e) => { DialogResult = DialogResult.OK; Close(); };
+            cancelButton.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+
+            // --- Functional feature controls ---
+            // Path status indicator
+            lblPathStatus = new System.Windows.Forms.Label { Left = 625, Top = 50, Width = 30, Height = 18, Text = "" };
+            chkLivePreview = new CheckBox { Left = 490, Top = 15, Width = 150, Text = "Live Preview" };
+            previewBox = new TextBox { Left = 140, Top = 72, Width = 340, Height = 70, ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Visible = false };
+            var btnRefresh = new Button { Left = 485, Top = 70, Width = 75, Height = 26, Text = "Refresh", Visible = false };
+            btnRefresh.Click += (s,e)=> { UpdatePreview(true); };
+
+            // Embedded PDF preview panel (right side)
+            // Bulk selection shortcut buttons inside alignment group
+            btnSelectAll = new Button { Left = 15, Top = 110, Width = 80, Height = 24, Text = "All" };
+            btnSelectNone = new Button { Left = 100, Top = 110, Width = 80, Height = 24, Text = "None" };
+            btnSelectRecommended = new Button { Left = 185, Top = 110, Width = 120, Height = 24, Text = "Recommended" };
+            grpAlignment.Controls.AddRange(new Control[] { btnSelectAll, btnSelectNone, btnSelectRecommended });
+            btnSelectAll.Click += (s,e)=> { SetAllSelections(true); UpdatePreview(); };
+            btnSelectNone.Click += (s,e)=> { SetAllSelections(false); UpdatePreview(); };
+            btnSelectRecommended.Click += (s,e)=> { ApplyRecommended(); UpdatePreview(); };
+
+            // Preferences checkboxes (repositioned to avoid button overlap)
+            chkRemember = new CheckBox { Left = 20, Top = 360, Width = 180, Text = "Remember my selections" };
+            chkOpenFolder = new CheckBox { Left = 220, Top = 360, Width = 190, Text = "Open folder after creation" };
+            chkOpenFiles = new CheckBox { Left = 425, Top = 360, Width = 200, Text = "Open files after creation" };
+
+            // Tooltips
+            toolTip = new ToolTip { AutoPopDelay = 8000, InitialDelay = 400, ReshowDelay = 200, ShowAlways = true };
+            toolTip.SetToolTip(chkAlignmentPdf, "Printable engineering alignment report (PDF)");
+            toolTip.SetToolTip(chkAlignmentTxt, "Plain text alignment data for quick review");
+            toolTip.SetToolTip(chkAlignmentXml, "XML alignment data for interoperability");
+            toolTip.SetToolTip(chkGeoTablePdf, "GeoTable formatted PDF summary");
+            toolTip.SetToolTip(chkGeoTableExcel, "GeoTable Excel for tabular analysis");
+            toolTip.SetToolTip(btnSelectRecommended, "Select recommended outputs for chosen report type");
+            toolTip.SetToolTip(outputPathTextBox, "Base path used to build filenames; no extension");
+            toolTip.SetToolTip(chkLivePreview, "Show dynamic list of files to be generated");
+            toolTip.SetToolTip(previewBox, "Live preview of output filenames");
+            // toolTip.SetToolTip(previewBox, "Preview of filenames that will be generated"); // removed from UI
+            toolTip.SetToolTip(chkRemember, "Persist these selections for next session");
+            toolTip.SetToolTip(chkOpenFolder, "Open containing folder after successful generation");
+            toolTip.SetToolTip(chkOpenFiles, "Open each generated file automatically");
+
+            // Events for dynamic preview and validation
+            reportTypeComboBox.SelectedIndexChanged += (s,e)=> { ReportType = reportTypeComboBox.SelectedItem?.ToString() ?? "Horizontal"; UpdatePreview(); };
+            chkLivePreview.CheckedChanged += (s,e)=> { previewBox.Visible = chkLivePreview.Checked; btnRefresh.Visible = chkLivePreview.Checked; UpdatePreview(true); };
+            outputPathTextBox.TextChanged += (s,e)=> { ValidatePath(); UpdatePreview(); };
+            chkAlignmentPdf.CheckedChanged += (s,e)=> { ValidatePath(); UpdatePreview(); };
+            chkAlignmentTxt.CheckedChanged += (s,e)=> { ValidatePath(); UpdatePreview(); };
+            chkAlignmentXml.CheckedChanged += (s,e)=> { ValidatePath(); UpdatePreview(); };
+            chkGeoTableExcel.CheckedChanged += (s,e)=> { ValidatePath(); UpdatePreview(); };
+
+            Controls.AddRange(new Control[] {
+                lblType, reportTypeComboBox,
+                lblOutput, outputPathTextBox, browseButton, lblPathStatus, chkLivePreview, previewBox, btnRefresh,
+                grpAlignment, grpGeoTable,
+                chkRemember, chkOpenFolder, chkOpenFiles,
+                okButton, cancelButton, helpButton
+            });
+
+            LoadPreferences();
+            ValidatePath();
+            UpdatePreview();
+            ApplyTheme();
+        }
+        private void SetAllSelections(bool value)
+        {
+            chkAlignmentPdf.Checked = value;
+            chkAlignmentTxt.Checked = value;
+            chkAlignmentXml.Checked = value;
+            chkGeoTablePdf.Checked = value;
+            chkGeoTableExcel.Checked = value;
+        }
+        private void ApplyRecommended()
+        {
+            SetAllSelections(false);
+            switch (ReportType)
+            {
+                case "Horizontal":
+                    chkAlignmentPdf.Checked = true;
+                    chkGeoTableExcel.Checked = true;
+                    break;
+                case "Vertical":
+                    chkAlignmentXml.Checked = true;
+                    break;
+                default:
+                    chkAlignmentPdf.Checked = true;
+                    break;
+            }
+        }
+        private string FormatStationLocal(double station)
+        {
+            int sta = (int)(station / 100);
+            double offset = station - (sta * 100);
+            return $"{sta:D2}+{offset:F2}";
+        }
+
+        private void UpdatePreview(bool force = false)
+        {
+            var list = new System.Collections.Generic.List<string>();
+            string basePath = OutputPath;
+            if (chkAlignmentPdf.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_Alignment_Report.pdf"));
+            if (chkAlignmentTxt.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_Alignment_Report.txt"));
+            if (chkAlignmentXml.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_Alignment_Report.xml"));
+            if (chkGeoTablePdf.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_GeoTable.pdf"));
+            if (chkGeoTableExcel.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_GeoTable.xlsx"));
+            if (previewBox.Visible)
+            {
+                if (list.Count == 0)
+                {
+                    previewBox.Text = "(No outputs selected)";
+                }
+                else
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine($"Alignment: {previewData.AlignmentName}");
+                    sb.AppendLine($"Span: {FormatStationLocal(previewData.StartStation)} - {FormatStationLocal(previewData.EndStation)}");
+                    sb.AppendLine($"Elements: Lines={previewData.LineCount} Arcs={previewData.ArcCount} Spirals={previewData.SpiralCount}");
+                    if (!string.IsNullOrEmpty(previewData.ProfileName) && ReportType == "Vertical") sb.AppendLine($"Profile: {previewData.ProfileName}");
+                    sb.AppendLine();
+                    // For each selected format, append a snippet header + sample lines
+                    System.Collections.Generic.List<string> sample = ReportType == "Vertical" ? previewData.VerticalSampleLines : previewData.HorizontalSampleLines;
+                    int maxLinesPerFormat = 8;
+                    if (chkAlignmentPdf.Checked) AppendFormatSnippet(sb, "Alignment PDF", sample, maxLinesPerFormat);
+                    if (chkAlignmentTxt.Checked) AppendFormatSnippet(sb, "Alignment TXT", sample, maxLinesPerFormat);
+                    if (chkAlignmentXml.Checked) AppendFormatSnippet(sb, "Alignment XML", sample, maxLinesPerFormat);
+                    if (chkGeoTablePdf.Checked) AppendFormatSnippet(sb, "GeoTable PDF", sample, maxLinesPerFormat);
+                    if (chkGeoTableExcel.Checked) AppendFormatSnippet(sb, "GeoTable Excel", sample, maxLinesPerFormat);
+                    previewBox.Text = sb.ToString();
+                }
+            }
+            okButton.Enabled = lblPathStatus.Text == "✔" && list.Count > 0;
+            // Trigger PDF side preview regeneration if needed
+            // (PDF preview hook removed)
+            {
+                // (PDF preview generation removed)
+            }
+        }
+
+        private void AppendFormatSnippet(System.Text.StringBuilder sb, string title, System.Collections.Generic.List<string> source, int limit)
+        {
+            sb.AppendLine($"[{title}] sample:");
+            if (source == null || source.Count == 0)
+            {
+                sb.AppendLine("  (no sample available)");
+            }
+            else
+            {
+                for (int i = 0; i < source.Count && i < limit; i++)
+                    sb.AppendLine("  " + source[i]);
+            }
+            sb.AppendLine();
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Save preferences if requested
+            if (DialogResult == DialogResult.OK && chkRemember != null && chkRemember.Checked)
+                SavePreferences();
+            base.OnFormClosing(e);
+        }
+
+
+        private void ApplyTheme()
+        {
+            try
+            {
+                int theme = 0;
+                try
+                {
+                    object val = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("COLORTHEME");
+                    if (val is short s) theme = s; else if (val is int i) theme = i;
+                }
+                catch { }
+                bool dark = theme == 1;
+                if (dark)
+                {
+                    BackColor = System.Drawing.Color.FromArgb(45,45,48);
+                    ForeColor = System.Drawing.Color.Gainsboro;
+                    foreach (Control c in Controls)
                     {
-                        string pdfPath = baseOutputPath + ".pdf";
-                        if (reportType == "Vertical")
-                            GenerateVerticalReportPdf(alignment, pdfPath);
-                        else
-                            GenerateHorizontalReportPdf(alignment, pdfPath);
-                        generatedFiles.Add(pdfPath);
+                        if (c is GroupBox)
+                        {
+                            c.BackColor = System.Drawing.Color.FromArgb(58,58,62);
+                            c.ForeColor = System.Drawing.Color.Gainsboro;
+                        }
+                        else if (c is TextBox || c is ComboBox)
+                        {
+                            c.BackColor = System.Drawing.Color.FromArgb(63,63,70);
+                            c.ForeColor = System.Drawing.Color.Gainsboro;
+                        }
+                        else if (c is Button)
+                        {
+                            c.BackColor = System.Drawing.Color.FromArgb(72,72,80);
+                            c.ForeColor = System.Drawing.Color.Gainsboro;
+                        }
+                        else if (c is CheckBox || c is System.Windows.Forms.Label)
+                        {
+                            c.ForeColor = System.Drawing.Color.Gainsboro;
+                        }
                     }
-
-                    // Generate TXT if requested
-                    if (chkTXT.Checked)
+                }
+            }
+            catch { }
+        }
+        private void ValidatePath()
+        {
+            string raw = outputPathTextBox.Text.Trim();
+            bool valid = false;
+            string validationMessage = string.Empty;
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(raw))
+                {
+                    string dir = System.IO.Path.GetDirectoryName(raw);
+                    if (string.IsNullOrEmpty(dir)) dir = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                    
+                    // Check if path contains invalid characters
+                    if (raw.IndexOfAny(System.IO.Path.GetInvalidPathChars()) >= 0)
                     {
-                        string txtPath = baseOutputPath + ".txt";
-                        if (reportType == "Vertical")
-                            GenerateVerticalReport(alignment, txtPath);
-                        else
-                            GenerateHorizontalReport(alignment, txtPath);
-                        generatedFiles.Add(txtPath);
+                        validationMessage = "Path contains invalid characters";
+                        valid = false;
                     }
-
-                    // Generate XML if requested
-                    if (chkXML.Checked)
+                    else if (!System.IO.Directory.Exists(dir))
                     {
-                        string xmlPath = baseOutputPath + ".xml";
-                        if (reportType == "Vertical")
-                            GenerateVerticalReportXml(alignment, xmlPath);
-                        else
-                            GenerateHorizontalReportXml(alignment, xmlPath);
-                        generatedFiles.Add(xmlPath);
+                        try
+                        {
+                            System.IO.Directory.CreateDirectory(dir);
+                            validationMessage = "Path valid (created)";
+                            valid = true;
+                        }
+                        catch
+                        {
+                            validationMessage = "Cannot create directory";
+                            valid = false;
+                        }
                     }
-
-                    tr.Commit();
-
-                    progressBar.Visible = false;
-                    lblStatus.Text = $"Success! Generated {generatedFiles.Count} file(s)";
-
-                    string successMessage = $"Report(s) generated successfully!\n\n{generatedFiles.Count} file(s) created:\n";
-                    foreach (string file in generatedFiles)
+                    else
                     {
-                        successMessage += $"\n• {System.IO.Path.GetFileName(file)}";
+                        // Directory exists, test write permissions
+                        string testFile = System.IO.Path.Combine(dir, "_gt_writetest_" + Guid.NewGuid().ToString().Substring(0, 8) + ".tmp");
+                        try
+                        {
+                            System.IO.File.WriteAllText(testFile, "test");
+                            System.IO.File.Delete(testFile);
+                            
+                            // Check for OneDrive/Dropbox sync paths (informational warning only)
+                            string upperPath = dir.ToUpperInvariant();
+                            if (upperPath.Contains("ONEDRIVE") || upperPath.Contains("DROPBOX") || upperPath.Contains("GOOGLE DRIVE"))
+                            {
+                                validationMessage = "⚠ Sync folder (may have delays)";
+                                valid = true; // Valid with warning
+                            }
+                            else
+                            {
+                                validationMessage = "Path valid";
+                                valid = true;
+                            }
+                        }
+                        catch (System.Exception writeEx)
+                        {
+                            // If write test fails, still allow if it's a known sync path (user may have permissions later)
+                            string upperPath = dir.ToUpperInvariant();
+                            if (upperPath.Contains("ONEDRIVE") || upperPath.Contains("DROPBOX") || upperPath.Contains("GOOGLE DRIVE"))
+                            {
+                                validationMessage = "⚠ Sync folder (write test failed, may sync later)";
+                                valid = true; // Allow with warning
+                            }
+                            else
+                            {
+                                validationMessage = $"Write test failed: {writeEx.Message}";
+                                valid = false;
+                            }
+                        }
                     }
-                    successMessage += $"\n\nLocation: {System.IO.Path.GetDirectoryName(generatedFiles[0])}";
-
-                    MessageBox.Show(successMessage, "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    validationMessage = "Path is empty";
+                    valid = false;
                 }
             }
             catch (System.Exception ex)
             {
-                progressBar.Visible = false;
-                lblStatus.Text = "Error occurred";
-                MessageBox.Show($"Error generating report:\n\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                validationMessage = $"Validation error: {ex.Message}";
+                valid = false;
             }
+            
+            lblPathStatus.Text = valid ? "✔" : "✖";
+            lblPathStatus.ForeColor = valid ? System.Drawing.Color.Green : System.Drawing.Color.Red;
+            toolTip.SetToolTip(lblPathStatus, validationMessage);
+            OutputPath = raw;
         }
-
-        private void BtnBatchProcess_Click(object sender, EventArgs e)
+        // (Removed duplicate OnFormClosing; handled earlier with preview disposal)
+        private void LoadPreferences()
         {
-            using (var dialog = new BatchProcessForm())
+            try
             {
-                if (dialog.ShowDialog() == DialogResult.OK)
+                if (System.IO.File.Exists(settingsFilePath))
                 {
-                    try
+                    string json = System.IO.File.ReadAllText(settingsFilePath);
+                    bool Bool(string key) => json.Contains("\"" + key + "\": true");
+                    string Val(string key)
                     {
-                        lblStatus.Text = "Processing batch...";
-                        progressBar.Visible = true;
-                        progressBar.Style = ProgressBarStyle.Marquee;
-
-                        AcApp.Document doc = AcApp.Application.DocumentManager.MdiActiveDocument;
-                        Editor ed = doc.Editor;
-
-                        string outputFolder = dialog.OutputFolder;
-                        bool includeVertical = dialog.IncludeVertical;
-                        bool includeHorizontal = dialog.IncludeHorizontal;
-
-                        using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
-                        {
-                            CivilDocument civilDoc = CivilApplication.ActiveDocument;
-
-                            using (ObjectIdCollection alignmentIds = civilDoc.GetAlignmentIds())
-                            {
-                                int count = 0;
-                                int total = alignmentIds.Count;
-
-                                foreach (ObjectId alignmentId in alignmentIds)
-                                {
-                                    Alignment alignment = tr.GetObject(alignmentId, OpenMode.ForRead) as Alignment;
-                                    if (alignment == null) continue;
-
-                                    count++;
-                                    lblStatus.Text = $"Processing {count}/{total}: {alignment.Name}";
-                                    System.Windows.Forms.Application.DoEvents();
-
-                                    if (includeVertical)
-                                    {
-                                        string path = System.IO.Path.Combine(outputFolder, $"{alignment.Name}_Vertical.pdf");
-                                        GenerateVerticalReportPdf(alignment, path);
-                                    }
-
-                                    if (includeHorizontal)
-                                    {
-                                        string path = System.IO.Path.Combine(outputFolder, $"{alignment.Name}_Horizontal.pdf");
-                                        GenerateHorizontalReportPdf(alignment, path);
-                                    }
-                                }
-
-                                tr.Commit();
-
-                                progressBar.Visible = false;
-                                lblStatus.Text = $"Batch complete! Processed {count} alignments";
-
-                                MessageBox.Show(
-                                    $"Batch processing complete!\n\n{count} alignments processed.",
-                                    "Success",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxIcon.Information
-                                );
-                            }
-                        }
+                        int i = json.IndexOf("\"" + key + "\":");
+                        if (i < 0) return string.Empty;
+                        int s = json.IndexOf('"', i + key.Length + 3) + 1;
+                        int e = json.IndexOf('"', s);
+                        if (s < 0 || e < 0) return string.Empty;
+                        return json.Substring(s, e - s);
                     }
-                    catch (System.Exception ex)
+                    string rt = Val("ReportType");
+                    if (!string.IsNullOrEmpty(rt))
                     {
-                        progressBar.Visible = false;
-                        lblStatus.Text = "Error during batch processing";
-                        MessageBox.Show($"Error:\n\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        int idx = reportTypeComboBox.Items.IndexOf(rt);
+                        if (idx >= 0) reportTypeComboBox.SelectedIndex = idx;
                     }
+                    string op = Val("OutputPath");
+                    if (!string.IsNullOrEmpty(op)) outputPathTextBox.Text = op;
+                    chkAlignmentPdf.Checked = Bool("AlignmentPDF");
+                    chkAlignmentTxt.Checked = Bool("AlignmentTXT");
+                    chkAlignmentXml.Checked = Bool("AlignmentXML");
+                    chkGeoTablePdf.Checked = Bool("GeoTablePDF");
+                    chkGeoTableExcel.Checked = Bool("GeoTableEXCEL");
+                    chkOpenFolder = chkOpenFolder ?? new CheckBox();
+                    chkOpenFiles = chkOpenFiles ?? new CheckBox();
+                    chkOpenFolder.Checked = Bool("OpenFolderAfter");
+                    chkOpenFiles.Checked = Bool("OpenFilesAfter");
+                    chkRemember.Checked = Bool("RememberSelections");
                 }
             }
+            catch { }
+        }
+        private void SavePreferences()
+        {
+            try
+            {
+                string dir = System.IO.Path.GetDirectoryName(settingsFilePath) ?? settingsFilePath;
+                if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
+                string json = "{" +
+                    "\n  \"ReportType\": \"" + ReportType + "\"," +
+                    "\n  \"OutputPath\": \"" + OutputPath.Replace("\\", "\\\\") + "\"," +
+                    "\n  \"AlignmentPDF\": " + GenerateAlignmentPDF.ToString().ToLower() + "," +
+                    "\n  \"AlignmentTXT\": " + GenerateAlignmentTXT.ToString().ToLower() + "," +
+                    "\n  \"AlignmentXML\": " + GenerateAlignmentXML.ToString().ToLower() + "," +
+                    "\n  \"GeoTablePDF\": " + GenerateGeoTablePDF.ToString().ToLower() + "," +
+                    "\n  \"GeoTableEXCEL\": " + GenerateGeoTableEXCEL.ToString().ToLower() + "," +
+                    "\n  \"OpenFolderAfter\": " + OpenFolderAfter.ToString().ToLower() + "," +
+                    "\n  \"OpenFilesAfter\": " + OpenFilesAfter.ToString().ToLower() + "," +
+                    "\n  \"RememberSelections\": " + (chkRemember?.Checked == true).ToString().ToLower() + "\n}";
+                System.IO.File.WriteAllText(settingsFilePath, json);
+            }
+            catch { }
         }
 
-        // Helper methods to call the report generation methods
-        private void GenerateVerticalReport(Alignment alignment, string path)
+        // Placeholder removed (no viewer logic)
+    }
+
+    // Progress Status Window for real-time feedback during report generation
+    public class ProgressStatusWindow : Form
+    {
+        private ProgressBar progressBar;
+        private System.Windows.Forms.Label lblStatus;
+        private System.Windows.Forms.Label lblStep;
+        private int totalSteps;
+        private int currentStep;
+
+        public ProgressStatusWindow(int steps)
         {
-            var commands = new ReportCommands();
-            typeof(ReportCommands).GetMethod("GenerateVerticalReport",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .Invoke(commands, new object[] { alignment, path });
+            totalSteps = steps;
+            currentStep = 0;
+
+            Text = "Generating Reports";
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            StartPosition = FormStartPosition.CenterScreen;
+            Width = 450;
+            Height = 180;
+            ControlBox = false;
+
+            lblStatus = new System.Windows.Forms.Label
+            {
+                Left = 20,
+                Top = 20,
+                Width = 400,
+                Height = 30,
+                Text = "Initializing...",
+                Font = new System.Drawing.Font("Segoe UI", 10, System.Drawing.FontStyle.Regular)
+            };
+
+            progressBar = new ProgressBar
+            {
+                Left = 20,
+                Top = 60,
+                Width = 400,
+                Height = 25,
+                Minimum = 0,
+                Maximum = totalSteps * 100, // Use finer granularity
+                Value = 0,
+                Style = ProgressBarStyle.Continuous
+            };
+
+            lblStep = new System.Windows.Forms.Label
+            {
+                Left = 20,
+                Top = 95,
+                Width = 400,
+                Height = 20,
+                Text = $"Step 0 of {totalSteps}",
+                Font = new System.Drawing.Font("Segoe UI", 8, System.Drawing.FontStyle.Regular),
+                ForeColor = System.Drawing.Color.Gray
+            };
+
+            Controls.AddRange(new Control[] { lblStatus, progressBar, lblStep });
         }
 
-        private void GenerateVerticalReportPdf(Alignment alignment, string path)
+        public void UpdateStatus(string message)
         {
-            var commands = new ReportCommands();
-            typeof(ReportCommands).GetMethod("GenerateVerticalReportPdf",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .Invoke(commands, new object[] { alignment, path });
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => UpdateStatus(message)));
+                return;
+            }
+            lblStatus.Text = message;
+            System.Windows.Forms.Application.DoEvents();
         }
 
-        private void GenerateVerticalReportXml(Alignment alignment, string path)
+        public void IncrementProgress()
         {
-            var commands = new ReportCommands();
-            typeof(ReportCommands).GetMethod("GenerateVerticalReportXml",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .Invoke(commands, new object[] { alignment, path });
+            if (InvokeRequired)
+            {
+                Invoke(new Action(IncrementProgress));
+                return;
+            }
+            currentStep++;
+            progressBar.Value = currentStep * 100;
+            lblStep.Text = $"Step {currentStep} of {totalSteps}";
+            System.Windows.Forms.Application.DoEvents();
         }
 
-        private void GenerateHorizontalReport(Alignment alignment, string path)
+        public void Complete(string message)
         {
-            var commands = new ReportCommands();
-            typeof(ReportCommands).GetMethod("GenerateHorizontalReport",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .Invoke(commands, new object[] { alignment, path });
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => Complete(message)));
+                return;
+            }
+            progressBar.Value = progressBar.Maximum;
+            lblStatus.Text = message;
+            lblStatus.ForeColor = System.Drawing.Color.Green;
+            lblStep.Text = $"Completed: {totalSteps} of {totalSteps}";
+            System.Windows.Forms.Application.DoEvents();
         }
 
-        private void GenerateHorizontalReportPdf(Alignment alignment, string path)
+        public void Fail(string message)
         {
-            var commands = new ReportCommands();
-            typeof(ReportCommands).GetMethod("GenerateHorizontalReportPdf",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .Invoke(commands, new object[] { alignment, path });
-        }
-
-        private void GenerateHorizontalReportXml(Alignment alignment, string path)
-        {
-            var commands = new ReportCommands();
-            typeof(ReportCommands).GetMethod("GenerateHorizontalReportXml",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .Invoke(commands, new object[] { alignment, path });
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => Fail(message)));
+                return;
+            }
+            lblStatus.Text = message;
+            lblStatus.ForeColor = System.Drawing.Color.Red;
+            lblStep.Text = $"Failed at step {currentStep}";
+            System.Windows.Forms.Application.DoEvents();
         }
     }
+
 }
+#pragma warning restore 1591

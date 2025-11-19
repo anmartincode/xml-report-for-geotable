@@ -101,11 +101,123 @@
   },
   {
     "Index": 4,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 212.15453889605845,
+    "EndStation": 242.15449864532553,
+    "Length": 29.99995974926707,
+    "StartPoint": {
+      "X": 774406.9153395646,
+      "Y": 2928672.1458592927,
+      "Z": 2.422658500974592
+    },
+    "EndPoint": {
+      "X": 774426.2143036322,
+      "Y": 2928649.183724986,
+      "Z": 2.4826584204520774
+    },
+    "TotalX": 29.989161592579663,
+    "TotalY": 0.5998441226608049,
+    "Delta": 0.059999919488909315,
+    "RadiusIn": "Infinity",
+    "RadiusOut": 250.0000000401035,
+    "A": 86.60248228844178,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 3.5999903392530888,
+    "P": 0.1499995974688787,
+    "Spiral_PI_Station": 227.154518770692,
+    "Spiral_PI_Northing": 2928660.809114027,
+    "Spiral_PI_Easting": 774416.7374118037,
+    "Spiral_PI_Included_Angle": 0.059999919488909315,
+    "ChordLength": 29.995160042999366,
+    "ChordDirection": -0.8718615377612821,
+    "SPIStation": 232.15828477360395,
+    "SPIPoint": {
+      "X": 774420.0894662843,
+      "Y": 2928657.0928783817,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.0815927341008837,
+    "ShortTangent": 10.003416412863226,
+    "RadialPoint": {
+      "X": 774228.5529975187,
+      "Y": 2928496.1150865075,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 20.003745879768772,
+    "EndDirection": 2.4826584204520774,
+    "StartDirection": 2.422658500963168,
+    "CurveType": "InCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 5,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 281.0487266338699,
+    "EndStation": 311.04868656600144,
+    "Length": 29.99995993213158,
+    "StartPoint": {
+      "X": 774447.5450064281,
+      "Y": 2928616.7073753024,
+      "Z": 2.6382353323814183
+    },
+    "EndPoint": {
+      "X": 774460.9514464102,
+      "Y": 2928589.874988082,
+      "Z": 2.698235252234741
+    },
+    "TotalX": 29.989161775246735,
+    "TotalY": 0.5998441299716196,
+    "Delta": 0.059999919854638845,
+    "RadiusIn": 250.00000004010138,
+    "RadiusOut": "Infinity",
+    "A": 86.60248255238378,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 3.599990383140543,
+    "P": 0.14999959929752263,
+    "Spiral_PI_Station": 296.04870659993566,
+    "Spiral_PI_Northing": 2928603.3922403767,
+    "Spiral_PI_Easting": 774454.4492322141,
+    "Spiral_PI_Included_Angle": 0.059999919854638845,
+    "ChordLength": 29.995160225380772,
+    "ChordDirection": -1.1074395617304509,
+    "SPIStation": 291.0521431089844,
+    "SPIPoint": {
+      "X": 774452.3703460069,
+      "Y": 2928607.9447022444,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.0815927337351545,
+    "ShortTangent": 10.003416473880801,
+    "RadialPoint": {
+      "X": 774228.5529984072,
+      "Y": 2928496.115085155,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 20.003746001747448,
+    "EndDirection": 2.698235252234741,
+    "StartDirection": 2.638235332380102,
+    "CurveType": "OutCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 6,
@@ -155,11 +267,123 @@
   },
   {
     "Index": 7,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 545.0832017609574,
+    "EndStation": 590.0832011138679,
+    "Length": 44.99999935291048,
+    "StartPoint": {
+      "X": 774561.3463260826,
+      "Y": 2928378.467744975,
+      "Z": 2.698235252234406
+    },
+    "EndPoint": {
+      "X": 774580.7009704545,
+      "Y": 2928337.8426892613,
+      "Z": 2.6944852522837266
+    },
+    "TotalX": 44.99993607170424,
+    "TotalY": 0.056249941956873405,
+    "Delta": 0.0037499999511215383,
+    "RadiusIn": "Infinity",
+    "RadiusOut": 5999.999991926936,
+    "A": 519.6152381851161,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionLeft",
+    "K": 0.3374999907477671,
+    "P": 0.014062499614490296,
+    "Spiral_PI_Station": 567.5832014374126,
+    "Spiral_PI_Northing": 2928358.1461416506,
+    "Spiral_PI_Easting": 774571.0046066861,
+    "Spiral_PI_Included_Angle": 0.0037499999511215383,
+    "ChordLength": 44.99997122770118,
+    "ChordDirection": -1.1261889256015993,
+    "SPIStation": 575.0832233861466,
+    "SPIPoint": {
+      "X": 774574.2155755551,
+      "Y": 2928351.3682299326,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.1378426536386717,
+    "ShortTangent": 15.000019873617498,
+    "RadialPoint": {
+      "X": 779990.9100486995,
+      "Y": 2930931.99720139,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 30.00002166685013,
+    "EndDirection": 2.6944852522837266,
+    "StartDirection": 2.6982352522348485,
+    "CurveType": "InCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 8,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 670.5066989675739,
+    "EndStation": 715.5067334305168,
+    "Length": 45.00003446294288,
+    "StartPoint": {
+      "X": 774615.9577645267,
+      "Y": 2928265.5599067966,
+      "Z": 2.681081335956792
+    },
+    "EndPoint": {
+      "X": 774636.0567649325,
+      "Y": 2928225.2978806044,
+      "Z": 2.6773313330798585
+    },
+    "TotalX": 44.99997118158851,
+    "TotalY": 0.056250029731812985,
+    "Delta": 0.0037500028769576967,
+    "RadiusIn": 5999.999991926742,
+    "RadiusOut": "Infinity",
+    "A": 519.6154408929361,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionLeft",
+    "K": 0.33750051739846254,
+    "P": 0.014062521558269274,
+    "Spiral_PI_Station": 693.0067161990454,
+    "Spiral_PI_Northing": 2928245.4194752327,
+    "Spiral_PI_Easting": 774625.9883904129,
+    "Spiral_PI_Included_Angle": 0.0037500028769576967,
+    "ChordLength": 45.000006337868605,
+    "ChordDirection": -1.107785007095924,
+    "SPIStation": 685.506730554161,
+    "SPIPoint": {
+      "X": 774622.6238718092,
+      "Y": 2928252.122497772,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.1378426507128356,
+    "ShortTangent": 15.000031577008654,
+    "RadialPoint": {
+      "X": 779990.9100487368,
+      "Y": 2930931.9972013123,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 30.000045073590115,
+    "EndDirection": 2.6773313330798585,
+    "StartDirection": 2.681081335956817,
+    "CurveType": "OutCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 9,
@@ -273,7 +497,63 @@
   },
   {
     "Index": 12,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 1802.2581342384583,
+    "EndStation": 1882.2581291618478,
+    "Length": 79.99999492338951,
+    "StartPoint": {
+      "X": 775125.7525116208,
+      "Y": 2927255.1311054826,
+      "Z": 2.6732385341281333
+    },
+    "EndPoint": {
+      "X": 775161.540454851,
+      "Y": 2927183.5831056368,
+      "Z": 2.686890410395203
+    },
+    "TotalX": 79.99850394654408,
+    "TotalY": 0.3640451643276229,
+    "Delta": 0.013651876266872427,
+    "RadiusIn": "Infinity",
+    "RadiusOut": 2929.999999982313,
+    "A": 484.14872211348063,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 2.1843000640890717,
+    "P": 0.09101250267037798,
+    "Spiral_PI_Station": 1842.258131700153,
+    "Spiral_PI_Northing": 2927219.418107908,
+    "Spiral_PI_Easting": 775143.768613989,
+    "Spiral_PI_Included_Angle": 0.013651876266872427,
+    "ChordLength": 79.99933226338987,
+    "ChordDirection": -1.1069928255771162,
+    "SPIStation": 1855.5919848526396,
+    "SPIPoint": {
+      "X": 775149.828385543,
+      "Y": 2927207.5406451337,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.127940777322921,
+    "ShortTangent": 26.667138313619038,
+    "RadialPoint": {
+      "X": 772529.2523599453,
+      "Y": 2925896.7422509408,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 53.33385062128934,
+    "EndDirection": 2.686890410395203,
+    "StartDirection": 2.6732385341283305,
+    "CurveType": "InCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 13,
@@ -295,7 +575,63 @@
   },
   {
     "Index": 14,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 2388.467591853838,
+    "EndStation": 2468.4675862414315,
+    "Length": 79.9999943875938,
+    "StartPoint": {
+      "X": 775343.5731120439,
+      "Y": 2926711.9101504115,
+      "Z": 2.859658145103454
+    },
+    "EndPoint": {
+      "X": 775365.1298093196,
+      "Y": 2926634.8698889934,
+      "Z": 2.87331002127877
+    },
+    "TotalX": 79.99850341077835,
+    "TotalY": 0.3640451594513507,
+    "Delta": 0.013651876175440053,
+    "RadiusIn": 2929.9999999822403,
+    "RadiusOut": "Infinity",
+    "A": 484.14872049219446,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 2.1843000348306596,
+    "P": 0.09101250145127747,
+    "Spiral_PI_Station": 2428.4675890476346,
+    "Spiral_PI_Northing": 2926673.4268807946,
+    "Spiral_PI_Easting": 775354.4829082636,
+    "Spiral_PI_Included_Angle": 0.013651876175440053,
+    "ChordLength": 79.99933172724161,
+    "ChordDirection": -1.2979630762723147,
+    "SPIStation": 2415.134729994851,
+    "SPIPoint": {
+      "X": 775350.99229122,
+      "Y": 2926686.2958568046,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.127940777414353,
+    "ShortTangent": 26.667138135010955,
+    "RadialPoint": {
+      "X": 772529.2523600328,
+      "Y": 2925896.742250715,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 53.333850264081775,
+    "EndDirection": 2.87331002127877,
+    "StartDirection": 2.85965814510333,
+    "CurveType": "OutCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 15,
@@ -873,47 +1209,663 @@
   },
   {
     "Index": 36,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 3046.8519493199833,
+    "EndStation": 3201.851949328382,
+    "Length": 155.00000000839867,
+    "StartPoint": {
+      "X": 775518.4455621107,
+      "Y": 2926077.1757511366,
+      "Z": 2.8733100212792575
+    },
+    "EndPoint": {
+      "X": 775554.0539844082,
+      "Y": 2925926.405585442,
+      "Z": 2.9823881352879775
+    },
+    "TotalX": 154.81568202341288,
+    "TotalY": 5.630914814161333,
+    "Delta": 0.10907811400984924,
+    "RadiusIn": "Infinity",
+    "RadiusOut": 710.5000000018468,
+    "A": 331.85463686116174,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 33.81421534488549,
+    "P": 1.4089256393702285,
+    "Spiral_PI_Station": 3124.3519493241824,
+    "Spiral_PI_Northing": 2926002.266946507,
+    "Spiral_PI_Easting": 775538.3081899976,
+    "Spiral_PI_Included_Angle": 0.10907811400984924,
+    "ChordLength": 154.91805124655596,
+    "ChordDirection": -1.3388694024986658,
+    "SPIStation": 3150.2497565729063,
+    "SPIPoint": {
+      "X": 775545.8538284262,
+      "Y": 2925977.4767366867,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.032514539579944,
+    "ShortTangent": 51.725284411895714,
+    "RadialPoint": {
+      "X": 774852.5391742969,
+      "Y": 2925813.7680197847,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 103.39780725357082,
+    "EndDirection": 2.9823881352879775,
+    "StartDirection": 2.8733100212781277,
+    "CurveType": "InCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 37,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 3811.6342661315402,
+    "EndStation": 4001.6342665588477,
+    "Length": 190.00000042730733,
+    "StartPoint": {
+      "X": 775396.3989741292,
+      "Y": 2925356.5735502285,
+      "Z": 3.8406320716729567
+    },
+    "EndPoint": {
+      "X": 775261.7817775564,
+      "Y": 2925222.7046551257,
+      "Z": 3.974340727849376
+    },
+    "TotalX": 189.66059937049062,
+    "TotalY": 8.45740714645041,
+    "Delta": 0.13370865617650946,
+    "RadiusIn": 710.5000000018226,
+    "RadiusOut": "Infinity",
+    "A": 367.4166576299286,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 50.80928946134296,
+    "P": 2.1170537275559567,
+    "Spiral_PI_Station": 3906.6342663451937,
+    "Spiral_PI_Northing": 2925287.4008370168,
+    "Spiral_PI_Easting": 775331.3411604186,
+    "Spiral_PI_Included_Angle": 0.13370865617650946,
+    "ChordLength": 189.8490734482543,
+    "ChordDirection": -2.3589815974417574,
+    "SPIStation": 3875.0756341836095,
+    "SPIPoint": {
+      "X": 775355.5755515416,
+      "Y": 2925308.0116788833,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.0078839974132836,
+    "ShortTangent": 63.441368053489946,
+    "RadialPoint": {
+      "X": 774852.5391600996,
+      "Y": 2925813.767986641,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 126.7854894711231,
+    "EndDirection": 3.974340727849376,
+    "StartDirection": 3.840632071672867,
+    "CurveType": "OutCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 38,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 5472.882489351691,
+    "EndStation": 5607.882202183675,
+    "Length": 134.99971283198414,
+    "StartPoint": {
+      "X": 774173.762026821,
+      "Y": 2924232.4183137924,
+      "Z": 3.9778889894249163
+    },
+    "EndPoint": {
+      "X": 774071.341005771,
+      "Y": 2924144.523259284,
+      "Z": 4.053731524747166
+    },
+    "TotalX": 134.9220804562363,
+    "TotalY": 3.4115048474337475,
+    "Delta": 0.07584253532887837,
+    "RadiusIn": "Infinity",
+    "RadiusOut": 889.9999996478272,
+    "A": 346.6262315130271,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 20.477440979696386,
+    "P": 0.8532267074873494,
+    "Spiral_PI_Station": 5540.382345767684,
+    "Spiral_PI_Northing": 2924187.497056054,
+    "Spiral_PI_Easting": 774123.3818162001,
+    "Spiral_PI_Included_Angle": 0.07584253532887837,
+    "ChordLength": 134.96520351552167,
+    "ChordDirection": -2.4323722765113804,
+    "SPIStation": 5562.909429786997,
+    "SPIPoint": {
+      "X": 774106.9470961208,
+      "Y": 2924172.0808044,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.065750118260915,
+    "ShortTangent": 45.024570658069315,
+    "RadialPoint": {
+      "X": 773526.6114374726,
+      "Y": 2924848.3483062913,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 90.02694043396427,
+    "EndDirection": 4.053731524747166,
+    "StartDirection": 3.977888989418288,
+    "CurveType": "InCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 39,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 5986.788394917096,
+    "EndStation": 6166.7880136807535,
+    "Length": 179.99961876365734,
+    "StartPoint": {
+      "X": 773738.4802217551,
+      "Y": 2923965.6710307808,
+      "Z": 4.286007917806529
+    },
+    "EndPoint": {
+      "X": 773572.813999375,
+      "Y": 2923895.3994445372,
+      "Z": 4.36163800972516
+    },
+    "TotalX": 179.89668784807955,
+    "TotalY": 4.535942256747995,
+    "Delta": 0.07563009191975766,
+    "RadiusIn": "Infinity",
+    "RadiusOut": 1189.9999999645254,
+    "A": 462.81696849010063,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 27.22677542523348,
+    "P": 1.134448976051395,
+    "Spiral_PI_Station": 6076.788204298925,
+    "Spiral_PI_Northing": 2923928.966793991,
+    "Spiral_PI_Easting": 773656.3065806098,
+    "Spiral_PI_Included_Angle": 0.07563009191975766,
+    "ChordLength": 179.95386372868668,
+    "ChordDirection": -2.7404204007480772,
+    "SPIStation": 6106.824114106101,
+    "SPIPoint": {
+      "X": 773629.1914897407,
+      "Y": 2923916.0268273335,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.0659625616700357,
+    "ShortTangent": 60.032577329968845,
+    "RadialPoint": {
+      "X": 773163.9262556976,
+      "Y": 2925012.946227892,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 120.03571918967796,
+    "EndDirection": 4.36163800972516,
+    "StartDirection": 4.286007917805403,
+    "CurveType": "InCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 40,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 6470.873948935293,
+    "EndStation": 6645.8735983935085,
+    "Length": 174.9996494582158,
+    "StartPoint": {
+      "X": 773277.062834211,
+      "Y": 2923828.3365372517,
+      "Z": 4.617172409106317
+    },
+    "EndPoint": {
+      "X": 773102.2918842619,
+      "Y": 2923820.257080812,
+      "Z": 4.6907016735868
+    },
+    "TotalX": 174.90505865424416,
+    "TotalY": 4.287542375212318,
+    "Delta": 0.07352926448043375,
+    "RadiusIn": 1189.9999999645277,
+    "RadiusOut": "Infinity",
+    "A": 456.3437113065865,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 25.735191017992687,
+    "P": 1.0722996257496953,
+    "Spiral_PI_Station": 6558.373773664401,
+    "Spiral_PI_Northing": 2923822.6905142814,
+    "Spiral_PI_Easting": 773189.756550081,
+    "Spiral_PI_Included_Angle": 0.07352926448043375,
+    "ChordLength": 174.95760218548185,
+    "ChordDirection": -3.0953967139162035,
+    "SPIStation": 6529.2372185031545,
+    "SPIPoint": {
+      "X": 773218.9639312237,
+      "Y": 2923822.787780064,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.0680633891093594,
+    "ShortTangent": 58.363269570629015,
+    "RadialPoint": {
+      "X": 773163.9262414024,
+      "Y": 2925012.9462245675,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 116.69949006021125,
+    "EndDirection": 4.6907016735868,
+    "StartDirection": 4.617172409106367,
+    "CurveType": "OutCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 41,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 7143.172665558092,
+    "EndStation": 7418.172090558788,
+    "Length": 274.9994250006956,
+    "StartPoint": {
+      "X": 772605.018917727,
+      "Y": 2923816.9717558245,
+      "Z": 4.711994054261179
+    },
+    "EndPoint": {
+      "X": 772330.1774431061,
+      "Y": 2923809.9784961184,
+      "Z": 4.636857599401466
+    },
+    "TotalX": 274.84421500878403,
+    "TotalY": 6.884717083945361,
+    "Delta": 0.07513645485493536,
+    "RadiusIn": "Infinity",
+    "RadiusOut": 1830.0000015414103,
+    "A": 709.4004145580689,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionLeft",
+    "K": 41.3249637633959,
+    "P": 1.7218734901414956,
+    "Spiral_PI_Station": 7280.67237805844,
+    "Spiral_PI_Northing": 2923816.056540533,
+    "Spiral_PI_Easting": 772467.5244074477,
+    "Spiral_PI_Included_Angle": 0.07513645485493536,
+    "ChordLength": 274.93043093326054,
+    "ChordDirection": -3.1161534396591293,
+    "SPIStation": 7326.559859355933,
+    "SPIPoint": {
+      "X": 772421.6317382304,
+      "Y": 2923816.899331432,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.066456198734858,
+    "ShortTangent": 91.71578957743559,
+    "RadialPoint": {
+      "X": 772468.2684932553,
+      "Y": 2921985.196079634,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 183.38719379943961,
+    "EndDirection": 4.636857599401466,
+    "StartDirection": 4.711994054256403,
+    "CurveType": "InCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 42,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 7512.88070832482,
+    "EndStation": 7617.88067579308,
+    "Length": 104.99996746825914,
+    "StartPoint": {
+      "X": 772235.9658954722,
+      "Y": 2923800.3918021135,
+      "Z": 4.585104256403538
+    },
+    "EndPoint": {
+      "X": 772132.0931097489,
+      "Y": 2923785.074132255,
+      "Z": 4.556415740725983
+    },
+    "TotalX": 104.99132597542844,
+    "TotalY": 1.0040387103428998,
+    "Delta": 0.02868851567754525,
+    "RadiusIn": 1830.0000015414448,
+    "RadiusOut": "Infinity",
+    "A": 438.34910816467493,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionLeft",
+    "K": 6.024586425709788,
+    "P": 0.25102443440457445,
+    "Spiral_PI_Station": 7565.3806920589495,
+    "Spiral_PI_Northing": 2923793.105533528,
+    "Spiral_PI_Easting": 772183.9750168364,
+    "Spiral_PI_Included_Angle": 0.02868851567754525,
+    "ChordLength": 104.9961267086503,
+    "ChordDirection": -2.9951821858595773,
+    "SPIStation": 7547.883441146614,
+    "SPIPoint": {
+      "X": 772201.2463266905,
+      "Y": 2923795.948509572,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.112904137912248,
+    "ShortTangent": 35.00273282433067,
+    "RadialPoint": {
+      "X": 772468.2684810181,
+      "Y": 2921985.196078675,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 70.00299632910767,
+    "EndDirection": 4.556415740725983,
+    "StartDirection": 4.585104256403529,
+    "CurveType": "OutCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 43,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 8535.296639243317,
+    "EndStation": 8705.296515170157,
+    "Length": 169.99987592683934,
+    "StartPoint": {
+      "X": 771225.8937428372,
+      "Y": 2923642.0595921767,
+      "Z": 4.556215750895779
+    },
+    "EndPoint": {
+      "X": 771058.3870548713,
+      "Y": 2923613.138897366,
+      "Z": 4.511829360309099
+    },
+    "TotalX": 169.96638642764816,
+    "TotalY": 2.514873030704798,
+    "Delta": 0.04438639058561639,
+    "RadiusIn": "Infinity",
+    "RadiusOut": 1914.9999998189599,
+    "A": 570.56968230806,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionLeft",
+    "K": 15.091361784790033,
+    "P": 0.628806741032918,
+    "Spiral_PI_Station": 8620.296577206736,
+    "Spiral_PI_Northing": 2923628.528362006,
+    "Spiral_PI_Easting": 771141.9782127808,
+    "Spiral_PI_Included_Angle": 0.04438639058561639,
+    "ChordLength": 169.98499081289296,
+    "ChordDirection": -2.9706242073499,
+    "SPIStation": 8648.641587880846,
+    "SPIPoint": {
+      "X": 771113.9282331057,
+      "Y": 2923624.430014411,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.097206263004177,
+    "ShortTangent": 56.67726002443739,
+    "RadialPoint": {
+      "X": 771439.8890764812,
+      "Y": 2921736.5246038004,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 113.3449486366743,
+    "EndDirection": 4.511829360309099,
+    "StartDirection": 4.556215750894715,
+    "CurveType": "InCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 44,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 8889.009828378825,
+    "EndStation": 8999.009794423757,
+    "Length": 109.99996604493225,
+    "StartPoint": {
+      "X": 770880.3864426079,
+      "Y": 2923567.967150788,
+      "Z": 4.415895515282505
+    },
+    "EndPoint": {
+      "X": 770775.8245599881,
+      "Y": 2923533.8216084195,
+      "Z": 4.387174897513454
+    },
+    "TotalX": 109.99089278149967,
+    "TotalY": 1.0530269472119038,
+    "Delta": 0.028720617769011934,
+    "RadiusIn": 1914.9999998192334,
+    "RadiusOut": "Infinity",
+    "A": 458.9661588354428,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionLeft",
+    "K": 6.318533958761581,
+    "P": 0.2632722482817325,
+    "Spiral_PI_Station": 8944.00981140129,
+    "Spiral_PI_Northing": 2923551.2699177773,
+    "Spiral_PI_Easting": 770827.9833633734,
+    "Spiral_PI_Included_Angle": 0.028720617769011934,
+    "ChordLength": 109.9959333821502,
+    "ChordDirection": -2.8259520431206826,
+    "SPIStation": 8925.679364481874,
+    "SPIPoint": {
+      "X": 770845.3169133012,
+      "Y": 2923557.2534683105,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.1128720358207813,
+    "ShortTangent": 36.669536104227724,
+    "RadialPoint": {
+      "X": 771439.8890733763,
+      "Y": 2921736.524603103,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 73.33647950904765,
+    "EndDirection": 4.387174897513454,
+    "StartDirection": 4.415895515282466,
+    "CurveType": "OutCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 45,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 11263.426163795735,
+    "EndStation": 11423.425781242393,
+    "Length": 159.99961744665697,
+    "StartPoint": {
+      "X": 768630.1035840209,
+      "Y": 2922810.3141881577,
+      "Z": 4.387174897513749
+    },
+    "EndPoint": {
+      "X": 768477.2192900198,
+      "Y": 2922763.286922631,
+      "Z": 4.467576715326608
+    },
+    "TotalX": 159.89621740726503,
+    "TotalY": 4.286107095142579,
+    "Delta": 0.08040181781272292,
+    "RadiusIn": "Infinity",
+    "RadiusOut": 994.9999999958854,
+    "A": 398.9982698693885,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 25.728520184102955,
+    "P": 1.072021674337623,
+    "Spiral_PI_Station": 11343.425972519064,
+    "Spiral_PI_Northing": 2922785.2622493873,
+    "Spiral_PI_Easting": 768554.1289835476,
+    "Spiral_PI_Included_Angle": 0.08040181781272292,
+    "ChordLength": 159.95365283458,
+    "ChordDirection": -2.8431777097517523,
+    "SPIStation": 11370.128716546853,
+    "SPIPoint": {
+      "X": 768528.9941287439,
+      "Y": 2922776.2214790075,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.06119083577707,
+    "ShortTangent": 53.36606293417941,
+    "RadialPoint": {
+      "X": 768236.0569766631,
+      "Y": 2923728.6188544594,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 106.70255275569428,
+    "EndDirection": 4.467576715326608,
+    "StartDirection": 4.387174897513885,
+    "CurveType": "InCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 46,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 11877.035129332868,
+    "EndStation": 12047.034670695582,
+    "Length": 169.99954136271523,
+    "StartPoint": {
+      "X": 768027.5918768869,
+      "Y": 2922755.7019469277,
+      "Z": 4.923465507379209
+    },
+    "EndPoint": {
+      "X": 767863.7153999856,
+      "Y": 2922800.708641647,
+      "Z": 5.008892412587028
+    },
+    "TotalX": 169.87552175140266,
+    "TotalY": 4.838322108674707,
+    "Delta": 0.08542690520778316,
+    "RadiusIn": 994.9999999954741,
+    "RadiusOut": "Infinity",
+    "A": 411.2779396650546,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 29.045069410718575,
+    "P": 1.2102112254466073,
+    "Spiral_PI_Station": 11962.034900014225,
+    "Spiral_PI_Northing": 2922776.453393026,
+    "Spiral_PI_Easting": 767945.179201843,
+    "Spiral_PI_Included_Angle": 0.08542690520778316,
+    "ChordLength": 169.94440929652768,
+    "ChordDirection": 2.8735630969218025,
+    "SPIStation": 11933.74105736397,
+    "SPIPoint": {
+      "X": 767972.1444838896,
+      "Y": 2922767.582556494,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.05616574838201,
+    "ShortTangent": 56.705928031908684,
+    "RadialPoint": {
+      "X": 768236.0569600519,
+      "Y": 2923728.618854527,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 113.37638093375202,
+    "EndDirection": 5.008892412587028,
+    "StartDirection": 4.923465507379245,
+    "CurveType": "OutCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 47,
@@ -1101,7 +2053,63 @@
   },
   {
     "Index": 51,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 5732.108453519106,
+    "EndStation": 5897.107930328766,
+    "Length": 164.99947680966056,
+    "StartPoint": {
+      "X": 773968.1219871738,
+      "Y": 2924075.581565731,
+      "Z": 4.193311582482462
+    },
+    "EndPoint": {
+      "X": 773820.1314529681,
+      "Y": 2924002.7609508424,
+      "Z": 4.286007917805688
+    },
+    "TotalX": 164.8577555734233,
+    "TotalY": 5.095154021181066,
+    "Delta": 0.09269633532301198,
+    "RadiusIn": 889.9999996477706,
+    "RadiusOut": "Infinity",
+    "A": 383.20951749986614,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 30.589693660939666,
+    "P": 1.2745705692058193,
+    "Spiral_PI_Station": 5814.608191923936,
+    "Spiral_PI_Northing": 2924037.4594498323,
+    "Spiral_PI_Easting": 773894.977268518,
+    "Spiral_PI_Included_Angle": 0.09269633532301198,
+    "ChordLength": 164.93647312607254,
+    "ChordDirection": -2.6843150606664423,
+    "SPIStation": 5787.153327774992,
+    "SPIPoint": {
+      "X": 773920.3277760679,
+      "Y": 2924048.274944435,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.0488963182667814,
+    "ShortTangent": 55.04487425425621,
+    "RadialPoint": {
+      "X": 773526.6114236478,
+      "Y": 2924848.348297461,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 110.04920161359583,
+    "EndDirection": 4.286007917805688,
+    "StartDirection": 4.193311582482676,
+    "CurveType": "OutCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 52,
@@ -1243,11 +2251,123 @@
   },
   {
     "Index": 55,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 12240.584302159677,
+    "EndStation": 12440.584302476658,
+    "Length": 200.00000031697982,
+    "StartPoint": {
+      "X": 767678.61150924,
+      "Y": 2922857.2595874458,
+      "Z": 5.00889241258133
+    },
+    "EndPoint": {
+      "X": 767485.4670131557,
+      "Y": 2922908.7776660263,
+      "Z": 4.901365530688215
+    },
+    "TotalX": 199.76888345526223,
+    "TotalY": 7.162540843580574,
+    "Delta": 0.10752688189766241,
+    "RadiusIn": "Infinity",
+    "RadiusOut": 929.999999941074,
+    "A": 431.27717338505875,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionLeft",
+    "K": 43.01075282723267,
+    "P": 1.7921147011346945,
+    "Spiral_PI_Station": 12340.584302318168,
+    "Spiral_PI_Northing": 2922885.6183643024,
+    "Spiral_PI_Easting": 767582.7202297118,
+    "Spiral_PI_Included_Angle": 0.10752688189766241,
+    "ChordLength": 199.89724557453874,
+    "ChordDirection": 2.880928006140277,
+    "SPIStation": 12373.998475874669,
+    "SPIPoint": {
+      "X": 767551.0190026131,
+      "Y": 2922896.240274981,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.0340657716921307,
+    "ShortTangent": 66.74016404060875,
+    "RadialPoint": {
+      "X": 767310.7630293836,
+      "Y": 2921995.3344450514,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 133.4141737141187,
+    "EndDirection": 4.901365530688215,
+    "StartDirection": 5.008892412585878,
+    "CurveType": "InCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 56,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 12568.85264486748,
+    "EndStation": 12818.852643371667,
+    "Length": 249.9999985041868,
+    "StartPoint": {
+      "X": 767358.2222386285,
+      "Y": 2922924.1227028263,
+      "Z": 4.763442581872146
+    },
+    "EndPoint": {
+      "X": 767108.6085895112,
+      "Y": 2922914.493080285,
+      "Z": 4.629033980517241
+    },
+    "TotalX": 249.5487342878182,
+    "TotalY": 11.18627155549346,
+    "Delta": 0.13440860135489274,
+    "RadiusIn": 929.999999940801,
+    "RadiusOut": "Infinity",
+    "A": 482.1825365917911,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionLeft",
+    "K": 67.20430027534606,
+    "P": 2.8001791781394187,
+    "Spiral_PI_Station": 12693.852644119574,
+    "Spiral_PI_Northing": 2922923.504102698,
+    "Spiral_PI_Easting": 767233.2770825432,
+    "Spiral_PI_Included_Angle": 0.13440860135489274,
+    "ChordLength": 249.7993263720724,
+    "ChordDirection": -3.1030336658273487,
+    "SPIStation": 12652.32962341367,
+    "SPIPoint": {
+      "X": 767274.8540265841,
+      "Y": 2922928.382652088,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.0071840522349005,
+    "ShortTangent": 83.4769785483362,
+    "RadialPoint": {
+      "X": 767310.7629785434,
+      "Y": 2921995.334450036,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 166.82465510741184,
+    "EndDirection": 4.629033980517241,
+    "StartDirection": 4.763442581872134,
+    "CurveType": "OutCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   },
   {
     "Index": 57,
@@ -1297,6 +2417,62 @@
   },
   {
     "Index": 58,
-    "EntityType": "Spiral"
+    "EntityType": "Spiral",
+    "StartStation": 111.60831994626831,
+    "EndStation": 127.22639405615861,
+    "Length": 15.618074109890296,
+    "StartPoint": {
+      "X": 774340.242222586,
+      "Y": 2928747.3795158705,
+      "Z": 2.302586448674816
+    },
+    "EndPoint": {
+      "X": 774350.9831082205,
+      "Y": 2928736.054976661,
+      "Z": 2.4226585009735144
+    },
+    "TotalX": 15.595572091832974,
+    "TotalY": 0.6244546351700239,
+    "Delta": 0.12007205227150647,
+    "RadiusIn": 65.03625870645888,
+    "RadiusOut": "Infinity",
+    "A": 31.87069356489552,
+    "SpiralDefinition": "Clothoid",
+    "Direction": "DirectionRight",
+    "K": 3.7505884218060186,
+    "P": 0.1562745175752508,
+    "Spiral_PI_Station": 119.41735700121346,
+    "Spiral_PI_Northing": 2928741.879354297,
+    "Spiral_PI_Easting": 774345.7818775295,
+    "Spiral_PI_Included_Angle": 0.12007205227150647,
+    "ChordLength": 15.608068827260121,
+    "ChordDirection": -0.8118430434153221,
+    "SPIStation": 116.82150355102905,
+    "SPIPoint": {
+      "X": 774344.1207239598,
+      "Y": 2928743.896053454,
+      "Z": 0.0
+    },
+    "SPIAngle": 3.021520601318287,
+    "ShortTangent": 5.213183604544287,
+    "RadialPoint": {
+      "X": 774296.784831962,
+      "Y": 2928698.9938759897,
+      "Z": 0.0
+    },
+    "MinimumTransitionLength": -1.0,
+    "LongTangent": 10.41992336888973,
+    "EndDirection": 2.4226585009735144,
+    "StartDirection": 2.302586448702008,
+    "CurveType": "OutCurve",
+    "Compound": false,
+    "SubEntityType": "Spiral",
+    "CurveGroupSubEntityIndex": "",
+    "CurveGroupIndex": "",
+    "AutoDelete": false,
+    "IsDisposed": false,
+    "UnmanagedObject": {
+      "value": 2644367625632
+    }
   }
 ]

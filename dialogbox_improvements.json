@@ -1,0 +1,230 @@
+{
+  "functional_improvements": {
+    "remember_last_used_settings": {
+      "description": "The dialog should store the user's most recent selections to streamline repeated report generation tasks.",
+      "details": {
+        "why": "Civil 3D users frequently generate the same report package multiple times during design iterations. Remembering preferences reduces repetitive setup.",
+        "how_it_works": "Write preferences to a small config file (JSON/XML) in the user's AppData or the plugin's installation folder.",
+        "stored_values": [
+          "Last selected Report Type",
+          "Last used Base Output Path",
+          "Selected Alignment Reports",
+          "Selected GeoTable Reports",
+          "Dialog size and position"
+        ],
+        "ui_elements": [
+          {
+            "type": "checkbox",
+            "label": "Remember my selections"
+          }
+        ]
+      }
+    },
+
+    "preset_manager": {
+      "description": "Enables users to save named configurations for quick reuse.",
+      "details": {
+        "why": "Engineers often need different output bundles depending on whether the recipient is internal, external, or part of a specific submittal.",
+        "how_it_works": "Saved presets stored in a JSON array. Selecting a preset instantly loads all settings.",
+        "actions": ["Save Preset", "Load Preset", "Delete Preset"],
+        "ui_elements": [
+          { "type": "button", "label": "Save Preset" },
+          { "type": "button", "label": "Load Preset" },
+          { "type": "button", "label": "Delete Preset" },
+          { "type": "dropdown", "label": "Presets", "contents": ["Example: Horizontal - Full Package"] }
+        ]
+      }
+    },
+
+    "auto_validate_output_path": {
+      "description": "Checks whether the selected output directory exists and is writable.",
+      "details": {
+        "why": "Prevents errors from invalid paths or OneDrive sync delays.",
+        "validation_rules": [
+          "Path exists",
+          "User has write permissions",
+          "Directory is not read-only",
+          "Warns if the path is synced (OneDrive/Dropbox) and may cause delays"
+        ],
+        "visual_feedback": [
+          "Green check icon: Path valid",
+          "Red warning icon: Path invalid"
+        ],
+        "buttons": ["Open Folder"],
+        "ui_behavior": "Disable the OK button until the path is valid."
+      }
+    },
+
+    "bulk_selection_shortcuts": {
+      "description": "Allows users to quickly toggle multiple checkbox groups.",
+      "details": {
+        "why": "Reduces excessive clicking when multiple formats are needed.",
+        "options": ["Select All", "Select None", "Select Recommended"],
+        "recommended_logic": {
+          "Horizontal": ["Alignment PDF", "GeoTable Excel"],
+          "Vertical": ["Alignment XML"],
+          "Superelevation": ["Alignment PDF", "Alignment TXT"]
+        }
+      }
+    },
+
+    "progress_status_window": {
+      "description": "Shows real-time feedback during processing.",
+      "details": {
+        "why": "Large alignments or long Excel outputs can take time; users want reassurance.",
+        "features": [
+          "Progress bar (determinate or indeterminate)",
+          "Status text for each step",
+          "Success or failure summary at the end"
+        ],
+        "examples": [
+          "Generating Alignment XML...",
+          "Compiling GeoTable Excel...",
+          "Finalizing PDF outputs..."
+        ]
+      }
+    },
+
+    "tooltips": {
+      "description": "Provides context-sensitive help for output formats.",
+      "details": {
+        "why": "New users and interns may not know the purpose of each output type.",
+        "examples": {
+          "PDF": "A printable engineering report formatted for submittal.",
+          "TXT": "A plain text version used for quick checks or basic review.",
+          "XML": "Machine-readable data for importing to other tools like Bentley or GIS.",
+          "Excel": "Spreadsheet output used for tabulation, calculations, and cost estimation workflows."
+        },
+        "presentation": "Tooltip appears on hover with small delay (300–500 ms)."
+      }
+    },
+
+    "preview_output_names": {
+      "description": "Shows the exact filenames that will be generated.",
+      "details": {
+        "why": "Avoids confusion when multiple alignments share similar names.",
+        "behavior": "Updates dynamically when report type or output path changes.",
+        "example_list": [
+          "GeoTable_Report_Horizontal_Alignment.pdf",
+          "GeoTable_Report_Horizontal_GeoTable.xlsx"
+        ],
+        "location": "Displayed beneath the Base Output Path field in a read-only box."
+      }
+    },
+
+    "open_after_creation": {
+      "description": "Automatically opens output files or folders once the report is generated.",
+      "details": {
+        "why": "Saves time digging through file explorer paths.",
+        "checkboxes": [
+          "Open containing folder after creation",
+          "Open generated report files automatically"
+        ],
+        "behavior": "Opens only if processing completes successfully."
+      }
+    }
+  },
+
+  "styling_and_layout": {
+    "group_boxes": {
+      "description": "Organize the dialog into clearly separated sections.",
+      "details": {
+        "groups": [
+          "Report Settings",
+          "Alignment Reports",
+          "GeoTable Reports",
+          "Preset Management"
+        ],
+        "benefit": "Improves scanning and reduces cognitive load."
+      }
+    },
+
+    "consistent_alignment": {
+      "description": "Uniform sizing and spacing of controls.",
+      "details": {
+        "requirements": [
+          "Equal-width group boxes",
+          "Aligned checkboxes in a clean vertical grid",
+          "Consistent margins around each section"
+        ],
+        "benefit": "Creates a clean, professional, CAD-like aesthetic."
+      }
+    },
+
+    "icons": {
+      "description": "Add small, subtle icons next to report options.",
+      "details": {
+        "style": "Flat, monochrome, Civil 3D-style icons",
+        "icons": {
+          "PDF": "Small document icon",
+          "TXT": "Plain text icon",
+          "Excel": "Grid icon",
+          "XML": "Brackets icon"
+        },
+        "benefit": "Faster visual recognition, especially for veteran CAD users."
+      }
+    },
+
+    "dropdown_size": {
+      "description": "Increase width of the Report Type dropdown.",
+      "details": {
+        "reason": "Longer report names (e.g., 'Superelevation Transition Report') should be visible.",
+        "improvement": "Avoids truncated names and enhances clarity."
+      }
+    },
+
+    "divider_lines": {
+      "description": "Soft gray separators between major sections.",
+      "details": {
+        "why": "Adds structure without overwhelming the interface.",
+        "style": "Thin Autodesk-like line separators"
+      }
+    },
+
+    "improved_button_area": {
+      "description": "Refine placement and grouping of action buttons.",
+      "details": {
+        "layout": "Center the OK and Cancel buttons horizontally.",
+        "optional_buttons": ["Help", "About"],
+        "why": "A cleaner end-of-dialog workflow and easier mouse targeting."
+      }
+    }
+  },
+
+  "advanced_enhancements": {
+    "live_preview_panel": {
+      "description": "Shows a real-time preview of the content that will appear in the report.",
+      "details": {
+        "preview_types": ["Snippet of tabular data", "Metadata overview", "Report structure"],
+        "toggle": "Enable/Disable Preview",
+        "why": "Helps catch incorrect selections before report generation."
+      }
+    },
+
+    "theme_awareness": {
+      "description": "The dialog respects AutoCAD's dark/light themes.",
+      "details": {
+        "behavior": [
+          "Automatically match Civil 3D theme",
+          "Switch icons and divider colors accordingly",
+          "Ensure text contrast remains readable"
+        ],
+        "benefit": "Feels more native to Civil 3D’s environment."
+      }
+    },
+
+    "output_template_designer": {
+      "description": "A customization tool allowing deeper control of output formatting.",
+      "details": {
+        "capabilities": [
+          "Reorder columns",
+          "Show/hide parameters",
+          "Customize headers/footers",
+          "Insert company logo"
+        ],
+        "storage": "Templates saved as XML or JSON configurations",
+        "benefit": "Supports firm-wide standards and professional submittal requirements."
+      }
+    }
+  }
+}
