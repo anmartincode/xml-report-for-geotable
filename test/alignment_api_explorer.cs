@@ -84,6 +84,34 @@ namespace C3DAlignmentExporter
                                     segmentData["EndStation"] = arc.EndStation;
                                     segmentData["Radius"] = arc.Radius;
                                     segmentData["Delta"] = arc.Delta;
+
+                                    // Calculate Degree of Curvature (Chord definition)
+                                    // D = 2 * arcsin(chord_length / (2 * R)) * (180 / π)
+                                    // Using standard 100-foot chord
+                                    double standardChord = 100.0;
+                                    double degreeOfCurvatureChord = 2.0 * Math.Asin(standardChord / (2.0 * arc.Radius)) * (180.0 / Math.PI);
+                                    segmentData["DegreeOfCurvature_Chord"] = degreeOfCurvatureChord;
+
+                                    // Calculate ChordLength (full chord from PC to PT)
+                                    // Chord = 2 * R * sin(Delta / 2)
+                                    double chordLength = 2.0 * arc.Radius * Math.Sin(arc.Delta / 2.0);
+                                    segmentData["ChordLength"] = chordLength;
+
+                                    // Calculate MidOrdinate (distance from midpoint of chord to midpoint of arc)
+                                    // M = R * (1 - cos(Delta / 2))
+                                    double midOrdinate = arc.Radius * (1.0 - Math.Cos(arc.Delta / 2.0));
+                                    segmentData["MidOrdinate"] = midOrdinate;
+
+                                    // Calculate External Tangent (distance from PI to midpoint of arc)
+                                    // E = R * (1 / cos(Delta / 2) - 1) = R * (sec(Delta / 2) - 1)
+                                    double externalTangent = arc.Radius * ((1.0 / Math.Cos(arc.Delta / 2.0)) - 1.0);
+                                    segmentData["ExternalTangent"] = externalTangent;
+
+                                    // Calculate External Secant (distance from PI to PC or PT along tangent)
+                                    // T = R * tan(Delta / 2)
+                                    double externalSecant = arc.Radius * Math.Tan(arc.Delta / 2.0);
+                                    segmentData["ExternalSecant"] = externalSecant;
+
                                     segmentData["Length"] = arc.Length;
                                     segmentData["Clockwise"] = arc.Clockwise;
                                     

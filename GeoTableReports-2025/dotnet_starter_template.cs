@@ -958,7 +958,7 @@ namespace GeoTableReports
                 double piStation = arc.PIStation;
                 double xPI = 0, yPI = 0;
 
-                // Try to get PI coordinates from sub-entities
+                // Try to get PI and Center coordinates from sub-entities
                 bool gotFromSubEntity = false;
                 try
                 {
@@ -969,16 +969,19 @@ namespace GeoTableReports
                         {
                             var subEntityArc = subEntity as AlignmentSubEntityArc;
                             var piPoint = subEntityArc.PIPoint;
+                            var centerPoint = subEntityArc.CenterPoint;
                             xPI = piPoint.X;  // Easting
                             yPI = piPoint.Y;  // Northing
+                            xc = centerPoint.X;  // Easting (Center)
+                            yc = centerPoint.Y;  // Northing (Center)
                             gotFromSubEntity = true;
                         }
                     }
                 }
                 catch { }
 
-                // Calculate deltaRadians for use in calculations
-                double deltaRadians = arc.Delta;
+                // Calculate deltaRadians using arc length and radius
+                double deltaRadians = arc.Length / Math.Abs(arc.Radius);
                 double tangent = arc.Radius * Math.Tan(Math.Abs(deltaRadians) / 2);
 
                 // Fallback: calculate if sub-entity access failed
@@ -987,12 +990,12 @@ namespace GeoTableReports
                     double backTangentDir = arc.StartDirection + Math.PI;
                     xPI = x1 + tangent * Math.Cos(backTangentDir);
                     yPI = y1 + tangent * Math.Sin(backTangentDir);
-                }
 
-                // Calculate center point
-                double midStation = (arc.StartStation + arc.EndStation) / 2;
-                double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
-                alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
+                    // Calculate center point as fallback
+                    double midStation = (arc.StartStation + arc.EndStation) / 2;
+                    double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
+                    alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
+                }
 
                 double deltaDegrees = deltaRadians * (180.0 / Math.PI);
                 double chord = 2 * arc.Radius * Math.Sin(Math.Abs(deltaRadians) / 2);
@@ -1008,7 +1011,8 @@ namespace GeoTableReports
                 writer.WriteLine($" Design Speed(mph): {50.0,15:F4}");
                 writer.WriteLine($" Cant(inches): {2.0,15:F3}");
                 writer.WriteLine($" Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}");
-                writer.WriteLine($"Degree of Curvature(Chord): {FormatAngle(5729.58 / arc.Radius)}");
+                double degreeOfCurvatureChord = (100.0 * deltaRadians) / (arc.Length) * (180.0 / Math.PI);
+                writer.WriteLine($"Degree of Curvature(Chord): {FormatAngle(degreeOfCurvatureChord)}");
                 writer.WriteLine($" Length: {arc.Length,15:F4}");
                 writer.WriteLine($" Length(Chorded): {arc.Length,15:F4}");
                 writer.WriteLine($" Tangent: {tangent,15:F4}");
@@ -1253,15 +1257,11 @@ namespace GeoTableReports
                                 alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
                                 alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
 
-                                double midStation = (arc.StartStation + arc.EndStation) / 2;
-                                double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
-                                alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
-
                                 // Get PI station and coordinates from arc properties
                                 double piStation = arc.PIStation;
                                 double xPI = 0, yPI = 0;
 
-                                // Try to get PI coordinates from sub-entities
+                                // Try to get PI and Center coordinates from sub-entities
                                 bool gotFromSubEntity = false;
                                 try
                                 {
@@ -1272,16 +1272,19 @@ namespace GeoTableReports
                                         {
                                             var subEntityArc = subEntity as AlignmentSubEntityArc;
                                             var piPoint = subEntityArc.PIPoint;
+                                            var centerPoint = subEntityArc.CenterPoint;
                                             xPI = piPoint.X;  // Easting
                                             yPI = piPoint.Y;  // Northing
+                                            xc = centerPoint.X;  // Easting (Center)
+                                            yc = centerPoint.Y;  // Northing (Center)
                                             gotFromSubEntity = true;
                                         }
                                     }
                                 }
                                 catch { }
 
-                                // Calculate deltaRadians for use in calculations
-                                double deltaRadians = arc.Delta;
+                                // Calculate deltaRadians using arc length and radius
+                                double deltaRadians = arc.Length / Math.Abs(arc.Radius);
 
                                 // Fallback: calculate if sub-entity access failed
                                 if (!gotFromSubEntity)
@@ -1290,6 +1293,11 @@ namespace GeoTableReports
                                     double backTangentDir = arc.StartDirection + Math.PI;
                                     xPI = x1 + tangent * Math.Cos(backTangentDir);
                                     yPI = y1 + tangent * Math.Sin(backTangentDir);
+
+                                    // Calculate center point as fallback
+                                    double midStation = (arc.StartStation + arc.EndStation) / 2;
+                                    double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
+                                    alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
                                 }
 
                                 double deltaDegrees = deltaRadians * (180.0 / Math.PI);
@@ -1720,7 +1728,7 @@ namespace GeoTableReports
                 double piStation = arc.PIStation;
                 double xPI = 0, yPI = 0;
 
-                // Try to get PI coordinates from sub-entities
+                // Try to get PI and Center coordinates from sub-entities
                 bool gotFromSubEntity = false;
                 try
                 {
@@ -1731,16 +1739,19 @@ namespace GeoTableReports
                         {
                             var subEntityArc = subEntity as AlignmentSubEntityArc;
                             var piPoint = subEntityArc.PIPoint;
+                            var centerPoint = subEntityArc.CenterPoint;
                             xPI = piPoint.X;  // Easting
                             yPI = piPoint.Y;  // Northing
+                            xc = centerPoint.X;  // Easting (Center)
+                            yc = centerPoint.Y;  // Northing (Center)
                             gotFromSubEntity = true;
                         }
                     }
                 }
                 catch { }
 
-                // Calculate deltaRadians for use in calculations
-                double deltaRadians = arc.Delta;
+                // Calculate deltaRadians using arc length and radius
+                double deltaRadians = arc.Length / Math.Abs(arc.Radius);
                 double tangent = arc.Radius * Math.Tan(Math.Abs(deltaRadians) / 2);
 
                 // Fallback: calculate if sub-entity access failed
@@ -1749,12 +1760,12 @@ namespace GeoTableReports
                     double backTangentDir = arc.StartDirection + Math.PI;
                     xPI = x1 + tangent * Math.Cos(backTangentDir);
                     yPI = y1 + tangent * Math.Sin(backTangentDir);
-                }
 
-                // Calculate center point
-                double midStation = (arc.StartStation + arc.EndStation) / 2;
-                double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
-                alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
+                    // Calculate center point as fallback
+                    double midStation = (arc.StartStation + arc.EndStation) / 2;
+                    double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
+                    alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
+                }
 
                 double deltaDegrees = deltaRadians * (180.0 / Math.PI);
                 double chord = 2 * arc.Radius * Math.Sin(Math.Abs(deltaRadians) / 2);
@@ -1773,7 +1784,8 @@ namespace GeoTableReports
                 document.Add(new Paragraph($"Design Speed(mph): {50.0:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Cant(inches): {2.0:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Degree of Curvature(Chord): {FormatAngle(5729.58 / arc.Radius)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                double degreeOfCurvatureChord = (100.0 * deltaRadians) / (arc.Length) * (180.0 / Math.PI);
+                document.Add(new Paragraph($"Degree of Curvature(Chord): {FormatAngle(degreeOfCurvatureChord)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Length: {arc.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Length(Chorded): {arc.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Tangent: {tangent:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
@@ -2490,7 +2502,7 @@ namespace GeoTableReports
 
                 string directionStr = arc.Clockwise ? "R" : "L";
                 double radius = Math.Abs(arc.Radius);
-                double delta = Math.Abs(arc.Delta) * (180.0 / Math.PI);
+                double delta = (arc.Length / radius) * (180.0 / Math.PI);
 
                 // PC point
                 ws.Cells[row, 1].Value = "CURVE";
@@ -3065,7 +3077,7 @@ namespace GeoTableReports
 
                 // Calculate curve parameters
                 double radius = Math.Abs(arc.Radius);
-                double delta = Math.Abs(arc.Delta);
+                double delta = arc.Length / radius;
                 double tc = CalculateTangentDistance(radius, delta);
                 double ec = CalculateExternalDistance(radius, delta);
                 string directionStr = arc.Clockwise ? "R" : "L";
@@ -3610,7 +3622,7 @@ namespace GeoTableReports
 
             // Calculate curve properties
             double radius = Math.Abs(arc.Radius);
-            double delta = Math.Abs(arc.Delta);
+            double delta = arc.Length / radius;
             double tc = CalculateTangentDistance(radius, delta);
             double ec = CalculateExternalDistance(radius, delta);
 
