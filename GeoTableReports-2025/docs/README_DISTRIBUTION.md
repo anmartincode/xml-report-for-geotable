@@ -93,6 +93,7 @@ VERTICAL POINTS
 ```
 
 ### Horizontal Alignment Report
+Note: Legacy Civil 3D sample label `POT` has been updated to InRoads-convention `POB` (Point of Beginning). Spiral transition labels (TS/SC/CS/ST) remain only when true spirals exist.
 ```
 HORIZONTAL ALIGNMENT REPORT
 Alignment: Main Road
@@ -102,7 +103,7 @@ HORIZONTAL POINTS
 ┌────────────┬──────────┬────────────┬────────────┐
 │ Type       │ Station  │ Northing   │ Easting    │
 ├────────────┼──────────┼────────────┼────────────┤
-│ POT        │ 0+00.00  │ 1000.0000  │ 2000.0000  │
+│ POB        │ 0+00.00  │ 1000.0000  │ 2000.0000  │
 │ PC         │ 2+50.00  │ 1050.0000  │ 2200.0000  │
 │ PT         │ 5+00.00  │ 1100.0000  │ 2450.0000  │
 └────────────┴──────────┴────────────┴────────────┘

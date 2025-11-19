@@ -41,6 +41,23 @@ namespace GeoTableReports
 {
     public class ReportCommands2025 : IExtensionApplication
     {
+        // Centralized label helper for InRoads-style reporting
+        private static class InRoadsLabels
+        {
+            public static string HorizontalTangentStart(int index) => index == 0 ? "POB" : "PI";
+            public static string HorizontalCurveStart => "PC";
+            public static string HorizontalCurveEnd => "PT";
+            public static string VerticalTangentStart(int index) => index == 0 ? "POB" : ""; // blank for subsequent tangents
+            public static string VerticalCurveStart => "PVC";
+            public static string VerticalCurveIntersection => "PVI";
+            public static string VerticalCurveEnd => "PVT";
+        }
+    // InRoads variable label mapping applied (2025 feature-single-version-compatibility branch):
+    // Horizontal: POB (start of alignment), PI (point of intersection of tangents),
+    // PC (point of curvature – start of circular curve), PT (point of tangency – end of circular curve),
+    // TS (tangent to spiral), SC (spiral to curve), CS (curve to spiral), ST (spiral to tangent) when spirals present.
+    // Vertical: POB (start), PVC (point of vertical curvature), PVI (point of vertical intersection), PVT (point of vertical tangency).
+    // Previous placeholders (POT, ST, CS for non-spiral curve ends) replaced to align with InRoads conventions.
 
         // Called when Civil 3D starts up
         public void Initialize()
@@ -160,7 +177,7 @@ namespace GeoTableReports
                                 progressWindow?.UpdateStatus("Generating GeoTable PDF...");
                                 string geoPdf = baseOutputPath + "_GeoTable.pdf";
                                 if (reportType == "Vertical")
-                                    GenerateVerticalReportPdf(alignment, geoPdf); // fallback
+                                    GenerateVerticalGeoTablePdf(alignment, geoPdf);
                                 else
                                     GenerateHorizontalGeoTablePdf(alignment, geoPdf);
                                 generatedFiles.Add(geoPdf);
@@ -257,7 +274,9 @@ namespace GeoTableReports
                                         if (l != null)
                                         {
                                             double x1=0,y1=0,z1=0; double x2=0,y2=0,z2=0; alignment.PointLocation(l.StartStation,0,0,ref x1,ref y1,ref z1); alignment.PointLocation(l.EndStation,0,0,ref x2,ref y2,ref z2);
-                                            data.HorizontalSampleLines.Add($"ST {FormatStation(l.StartStation),15} {FormatWithProperRounding(y1,4),15} {FormatWithProperRounding(x1,4),15}");
+                                            // InRoads: first tangent start POB, subsequent tangent starts omitted in sample (keep PI at end of tangent)
+                                            string tangentStartLabel = (i == 0) ? "POB" : "PI"; // if not first, treat start as PI entering curve sequence
+                                            data.HorizontalSampleLines.Add($"{tangentStartLabel} {FormatStation(l.StartStation),15} {FormatWithProperRounding(y1,4),15} {FormatWithProperRounding(x1,4),15}");
                                             data.HorizontalSampleLines.Add($"PI {FormatStation(l.EndStation),15} {FormatWithProperRounding(y2,4),15} {FormatWithProperRounding(x2,4),15}");
                                         }
                                         break;
@@ -266,8 +285,9 @@ namespace GeoTableReports
                                         if (a != null)
                                         {
                                             double x1=0,y1=0,z1=0; double x2=0,y2=0,z2=0; alignment.PointLocation(a.StartStation,0,0,ref x1,ref y1,ref z1); alignment.PointLocation(a.EndStation,0,0,ref x2,ref y2,ref z2);
-                                            data.HorizontalSampleLines.Add($"SC {FormatStation(a.StartStation),15} {FormatWithProperRounding(y1,4),15} {FormatWithProperRounding(x1,4),15}");
-                                            data.HorizontalSampleLines.Add($"CS {FormatStation(a.EndStation),15} {FormatWithProperRounding(y2,4),15} {FormatWithProperRounding(x2,4),15}");
+                                            // InRoads circular curve: PC start, PT end
+                                            data.HorizontalSampleLines.Add($"PC {FormatStation(a.StartStation),15} {FormatWithProperRounding(y1,4),15} {FormatWithProperRounding(x1,4),15}");
+                                            data.HorizontalSampleLines.Add($"PT {FormatStation(a.EndStation),15} {FormatWithProperRounding(y2,4),15} {FormatWithProperRounding(x2,4),15}");
                                         }
                                         break;
                                     case AlignmentEntityType.Spiral:
@@ -924,8 +944,9 @@ namespace GeoTableReports
 
                 writer.WriteLine("Element: Linear");
 
-                // InRails format uses ST (Start of Tangent) for linear element start points
-                writer.WriteLine($" ST  ( ) {FormatStation(line.StartStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
+                // InRoads: first tangent start POB, subsequent tangents use PI at end only
+                string startLabel = index == 0 ? "POB" : "PI";
+                writer.WriteLine($" {startLabel}  ( ) {FormatStation(line.StartStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
 
                 // Determine end point label based on what element type comes after this tangent
                 // We need to look ahead in the ORIGINAL alignment entities to see what follows this line
@@ -1030,10 +1051,12 @@ namespace GeoTableReports
                 double external = arc.Radius * (1 / Math.Cos(Math.Abs(deltaRadians) / 2) - 1);
 
                 writer.WriteLine("Element: Circular");
-                writer.WriteLine($" SC  ( ) {FormatStation(arc.StartStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
+                // InRoads circular: PC start
+                writer.WriteLine($" PC  ( ) {FormatStation(arc.StartStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
                 writer.WriteLine($" PI  ( ) {FormatStation(piStation),15} {FormatWithProperRounding(yPI, 4),15} {FormatWithProperRounding(xPI, 4),15}");
                 writer.WriteLine($" CC  ( ) {FormatWithProperRounding(yc, 4),32} {FormatWithProperRounding(xc, 4),15}");
-                writer.WriteLine($" CS  ( ) {FormatStation(arc.EndStation),15} {FormatWithProperRounding(y2, 4),15} {FormatWithProperRounding(x2, 4),15}");
+                // InRoads circular: PT end
+                writer.WriteLine($" PT  ( ) {FormatStation(arc.EndStation),15} {FormatWithProperRounding(y2, 4),15} {FormatWithProperRounding(x2, 4),15}");
                 writer.WriteLine($" Radius: {FormatWithProperRounding(arc.Radius, 4),15}");
                 writer.WriteLine($" Design Speed(mph): {FormatWithProperRounding(50.0, 4),15}");
                 writer.WriteLine($" Cant(inches): {2.0,15:F3}");
@@ -1862,8 +1885,8 @@ namespace GeoTableReports
                 document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10));
                 document.Add(new Paragraph("\n").SetFontSize(5));
 
-                // InRails format uses ST (Start of Tangent) for linear element start points
-                AddHorizontalDataRow(document, "ST  ( ) ", FormatStation(line.StartStation), y1, x1, normalFont);
+                // InRoads convention: POB (Point of Beginning) at first tangent start
+                AddHorizontalDataRow(document, "POB  ( ) ", FormatStation(line.StartStation), y1, x1, normalFont);
 
                 // Determine end point label based on what element type comes after this tangent
                 // We need to look ahead in the ORIGINAL alignment entities to see what follows this line
@@ -1970,10 +1993,10 @@ namespace GeoTableReports
                 document.Add(new Paragraph("Element: Circular").SetFont(boldFont).SetFontSize(10));
                 document.Add(new Paragraph("\n").SetFontSize(5));
 
-                AddHorizontalDataRow(document, "SC  ( ) ", FormatStation(arc.StartStation), y1, x1, normalFont);
+                AddHorizontalDataRow(document, "PC  ( ) ", FormatStation(arc.StartStation), y1, x1, normalFont);
                 AddHorizontalDataRow(document, "PI  ( ) ", FormatStation(piStation), yPI, xPI, normalFont);
                 AddHorizontalDataRow(document, "CC  ( ) ", "               ", yc, xc, normalFont);
-                AddHorizontalDataRow(document, "CS  ( ) ", FormatStation(arc.EndStation), y2, x2, normalFont);
+                AddHorizontalDataRow(document, "PT  ( ) ", FormatStation(arc.EndStation), y2, x2, normalFont);
 
                 document.Add(new Paragraph($"Radius: {arc.Radius:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Design Speed(mph): {50.0:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
@@ -2836,7 +2859,7 @@ namespace GeoTableReports
                 alignment.PointLocation(line.EndStation, 0, 0, ref x2, ref y2, ref z2);
 
                 string bearing = FormatBearing(line.Direction);
-                string pointLabel = (index == 0) ? "POT" : "PI";
+                string pointLabel = (index == 0) ? "POB" : "PI"; // InRoads: first tangent start POB
 
                 // Start point
                 ws.Cells[row, 1].Value = "TANGENT";
@@ -3391,7 +3414,7 @@ namespace GeoTableReports
                 alignment.PointLocation(line.StartStation, 0, 0, ref x1, ref y1, ref z1);
 
                 string bearing = FormatBearingDMS(line.Direction);
-                string pointLabel = (index == 0) ? "POT" : "PI";
+                string pointLabel = (index == 0) ? "POB" : "PI"; // InRoads mapping
 
                 ws.Cells[row, 1].Value = "TANGENT";
                 // Merge and center empty CURVE No. column
@@ -3511,10 +3534,10 @@ namespace GeoTableReports
                 // Debug message removed - ed not available in this context
                 // ed.WriteMessage($"\n[DEBUG Curve {curveNumber}] {debugMessage}");
 
-                // Row 1: ST (Start of Curve)
+                // Row 1: PC (Start of Curve per InRoads)
                 ws.Cells[row, 1].Value = "CURVE";
                 ws.Cells[row, 2].Value = $"{curveNumber}-{directionStr}";
-                ws.Cells[row, 3].Value = "ST";
+                ws.Cells[row, 3].Value = "PC";
                 ws.Cells[row, 4].Value = FormatStation(arc.StartStation);
                 ws.Cells[row, 5].Value = FormatBearingDMS(arc.StartDirection);
                 ws.Cells[row, 6].Value = y1;
@@ -3575,8 +3598,8 @@ namespace GeoTableReports
                 ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 3: CS/PT - merge empty cell (column 5)
-                ws.Cells[row, 3].Value = "CS";
+                // Row 3: PT (End of Curve per InRoads) - merge empty cell (column 5)
+                ws.Cells[row, 3].Value = "PT";
                 ws.Cells[row, 4].Value = FormatStation(arc.EndStation);
                 ws.Cells[row, 5].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 6].Value = y2;
@@ -3951,6 +3974,228 @@ namespace GeoTableReports
             }
         }
 
+        // NEW: Vertical GeoTable PDF generation (layout modeled after horizontal GeoTable style but with vertical geometry fields)
+        private void GenerateVerticalGeoTablePdf(CivDb.Alignment alignment, string outputPath)
+        {
+            try
+            {
+                // Acquire first profile (layout) with entities
+                ObjectId layoutProfileId = ObjectId.Null;
+                foreach (ObjectId pid in alignment.GetProfileIds())
+                {
+                    using (Profile profile = pid.GetObject(OpenMode.ForRead) as Profile)
+                    {
+                        if (profile != null && profile.Entities != null && profile.Entities.Count > 0)
+                        {
+                            layoutProfileId = pid; break;
+                        }
+                    }
+                }
+                if (layoutProfileId == ObjectId.Null)
+                {
+                    // Fallback: create minimal PDF noting absence
+                    using (PdfWriter w = new PdfWriter(outputPath))
+                    using (PdfDocument pdfDoc = new PdfDocument(w))
+                    using (Document doc = new Document(pdfDoc, PageSize.LETTER))
+                    {
+                        doc.Add(new Paragraph("No vertical profile found.").SetFontSize(11));
+                    }
+                    return;
+                }
+
+                using (Profile profile = layoutProfileId.GetObject(OpenMode.ForRead) as Profile)
+                using (PdfWriter writer = new PdfWriter(outputPath))
+                using (PdfDocument pdfDoc = new PdfDocument(writer))
+                {
+                    pdfDoc.SetDefaultPageSize(PageSize.LETTER.Rotate());
+                    using (Document document = new Document(pdfDoc, PageSize.LETTER.Rotate(), false))
+                    {
+                        document.SetMargins(20, 20, 20, 20);
+                        PdfFont font = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+                        PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+
+                        string trackName = alignment.Name?.ToUpper() ?? "VERTICAL GEOMETRY";
+                        document.Add(new Paragraph($"VERTICAL PROFILE DATA - {trackName}")
+                            .SetFont(boldFont).SetFontSize(10)
+                            .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                            .SetMarginBottom(3));
+
+                        // Column layout mirrored from horizontal (retain widths for consistency)
+                        float[] columnWidths = { 9f, 8f, 8f, 9f, 11f, 11f, 11f, 13f, 12f, 13f, 13f };
+                        iText.Layout.Element.Table table = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(columnWidths));
+                        table.SetWidth(UnitValue.CreatePercentValue(100));
+                        table.SetFont(font).SetFontSize(6.5f);
+                        table.SetFixedLayout();
+
+                        // Header row 1
+                        table.AddHeaderCell(CreateHeaderCell("ELEMENT", boldFont, 2, 1));
+                        table.AddHeaderCell(CreateHeaderCell("CURVE No.", boldFont, 2, 1));
+                        table.AddHeaderCell(CreateHeaderCell("POINT", boldFont, 2, 1));
+                        table.AddHeaderCell(CreateHeaderCell("STATION", boldFont, 2, 1));
+                        table.AddHeaderCell(CreateHeaderCell("ELEV", boldFont, 2, 1));
+                        table.AddHeaderCell(CreateHeaderCell("GRADE", boldFont, 2, 1));
+                        // DATA group (4 columns) for vertical-specific parameters
+                        table.AddHeaderCell(new iText.Layout.Element.Cell(1, 4)
+                            .Add(new Paragraph("DATA").SetFont(boldFont).SetFontSize(6.5f))
+                            .SetBackgroundColor(ColorConstants.LIGHT_GRAY)
+                            .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                            .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                            .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                            .SetBorderBottom(iText.Layout.Borders.Border.NO_BORDER)
+                            .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                            .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                            .SetPadding(1));
+
+                        // Header row 2 (blank placeholders under DATA)
+                        table.AddHeaderCell(CreateHeaderCell("", boldFont, 1, 1)); // filler after merged DATA group start
+                        table.AddHeaderCell(CreateHeaderCell("", boldFont, 1, 1));
+                        table.AddHeaderCell(CreateHeaderCell("", boldFont, 1, 1));
+                        table.AddHeaderCell(CreateHeaderCell("", boldFont, 1, 1));
+
+                        int curveNumber = 0;
+                        for (int i = 0; i < profile.Entities.Count; i++)
+                        {
+                            var entity = profile.Entities[i];
+                            if (entity == null) continue;
+                            try
+                            {
+                                switch (entity.EntityType)
+                                {
+                                    case ProfileEntityType.Tangent:
+                                        AddVerticalTangentRows(table, entity as ProfileTangent, i, font);
+                                        break;
+                                    case ProfileEntityType.Circular:
+                                        curveNumber++;
+                                        AddVerticalCurveRows(table, entity as ProfileCircular, curveNumber, font);
+                                        break;
+                                }
+                            }
+                            catch (System.Exception ex)
+                            {
+                                table.AddCell(CreateDataCell("ERROR", font));
+                                for (int c = 0; c < 10; c++) table.AddCell(CreateDataCell(ex.Message, font));
+                            }
+                        }
+
+                        document.Add(table);
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                throw new System.Exception($"Error generating Vertical GeoTable PDF: {ex.Message}", ex);
+            }
+        }
+
+        private void AddVerticalTangentRows(iText.Layout.Element.Table table, ProfileTangent tangent, int index, PdfFont font)
+        {
+            if (tangent == null) return;
+            double startSta = tangent.StartStation; double endSta = tangent.EndStation;
+            double startElev = tangent.StartElevation; double endElev = tangent.EndElevation;
+            double gradePct = tangent.Grade * 100.0;
+            // InRoads vertical: only the initial tangent start uses POB. Subsequent tangent starts precede PVC of a curve so no standalone label.
+            string pointLabel = (index == 0) ? "POB" : "";
+
+            // Single row representation for tangent start (mirroring horizontal tangent style with merged DATA)
+            table.AddCell(CreateDataCell("TANGENT", font));
+            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell(pointLabel, font)); // blank for non-initial tangents
+            table.AddCell(CreateDataCell(FormatStation(startSta), font));
+            table.AddCell(CreateDataCell(startElev.ToString("F2"), font));
+            table.AddCell(CreateDataCell(FormatGrade(gradePct), font));
+            table.AddCell(new iText.Layout.Element.Cell(1,4)
+                .Add(new Paragraph($"Grade={FormatGrade(gradePct)}  L={tangent.Length:F2}").SetFont(font).SetFontSize(6.5f))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                .SetBorderTop(new SolidBorder(ColorConstants.BLACK,0.5f))
+                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK,0.5f))
+                .SetBorderLeft(new SolidBorder(ColorConstants.BLACK,0.5f))
+                .SetBorderRight(new SolidBorder(ColorConstants.BLACK,0.5f))
+                .SetPadding(1));
+        }
+
+        private void AddVerticalCurveRows(iText.Layout.Element.Table table, ProfileCircular curve, int curveNumber, PdfFont font)
+        {
+            if (curve == null) return;
+            const double tol = 1e-8;
+            double pvcSta = curve.StartStation;
+            double pvtSta = curve.EndStation;
+            double pviSta = curve.PVIStation;
+            double pviElev = curve.PVIElevation;
+            double gradeInPct = curve.GradeIn * 100.0;
+            double gradeOutPct = curve.GradeOut * 100.0;
+            double length = curve.Length;
+            double gradeDiff = gradeOutPct - gradeInPct;
+            double k = Math.Abs(gradeDiff) > tol ? length / Math.Abs(gradeDiff) : double.PositiveInfinity;
+
+            // Compute PVC & PVT elevations if not exposed
+            double pvcElev = 0; double pvtElev = 0;
+            try { pvcElev = curve.StartElevation; } catch { pvcElev = pviElev - (curve.GradeIn * (length/2)); }
+            try { pvtElev = curve.EndElevation; } catch { pvtElev = pviElev + (curve.GradeOut * (length/2)); }
+
+            // High/Low point determination
+            // x from PVC where derivative = 0: x = -g1*L/(g2-g1) (grades in decimal)
+            double g1 = curve.GradeIn; double g2 = curve.GradeOut; double xHighLow = double.NaN; double highLowSta = double.NaN; double highLowElev = double.NaN; string curveType = "";
+            if (Math.Abs(g2 - g1) > tol)
+            {
+                xHighLow = -g1 * length / (g2 - g1); // feet along curve from PVC
+                if (xHighLow >= 0 && xHighLow <= length)
+                {
+                    highLowSta = pvcSta + xHighLow;
+                    // Elevation at x: y = yPVC + g1*x + ( (g2-g1)/(2L) ) * x^2
+                    highLowElev = pvcElev + g1 * xHighLow + ((g2 - g1) / (2.0 * length)) * xHighLow * xHighLow;
+                }
+            }
+            curveType = (g1 > g2) ? "Crest" : (g1 < g2 ? "Sag" : "Level");
+
+            string curveLabel = $"VC{curveNumber}-{(curveType.StartsWith("C")?"C":"S")}"; // VC#-C/S simplified label
+            string kDisplay = double.IsInfinity(k) ? "INF" : k.ToString("F2");
+
+            // Row 1: PVC
+            table.AddCell(new iText.Layout.Element.Cell(3,1).Add(new Paragraph("CURVE").SetFont(font).SetFontSize(8))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK,1)));
+            table.AddCell(new iText.Layout.Element.Cell(3,1).Add(new Paragraph(curveLabel).SetFont(font).SetFontSize(8))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK,1)));
+            table.AddCell(CreateDataCell("PVC", font));
+            table.AddCell(CreateDataCell(FormatStation(pvcSta), font));
+            table.AddCell(CreateDataCell(pvcElev.ToString("F2"), font));
+            table.AddCell(CreateDataCell(FormatGrade(gradeInPct), font));
+            table.AddCell(CreateDataCellNoBorder($"G1= {FormatGrade(gradeInPct)}", font).SetBorderTop(new SolidBorder(ColorConstants.BLACK,0.5f)).SetBorderLeft(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"G2= {FormatGrade(gradeOutPct)}", font).SetBorderTop(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"L= {length:F2}", font).SetBorderTop(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"K= {kDisplay}", font).SetBorderTop(new SolidBorder(ColorConstants.BLACK,0.5f)).SetBorderRight(new SolidBorder(ColorConstants.BLACK,0.5f)));
+
+            // Row 2: PVI
+            table.AddCell(CreateDataCell("PVI", font));
+            table.AddCell(CreateDataCell(FormatStation(pviSta), font));
+            table.AddCell(CreateDataCell(pviElev.ToString("F2"), font));
+            table.AddCell(CreateDataCell("", font)); // grade column blank for PVI row
+            table.AddCell(CreateDataCellNoBorder($"Type= {curveType}", font).SetBorderLeft(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"ΔG= {gradeDiff:F3}%", font));
+            table.AddCell(CreateDataCellNoBorder(!double.IsNaN(highLowSta)? $"HpSta= {FormatStation(highLowSta)}" : "HpSta= -", font));
+            table.AddCell(CreateDataCellNoBorder(!double.IsNaN(highLowElev)? $"HpElev= {highLowElev:F2}" : "HpElev= -", font).SetBorderRight(new SolidBorder(ColorConstants.BLACK,0.5f)));
+
+            // Row 3: PVT
+            table.AddCell(CreateDataCell("PVT", font));
+            table.AddCell(CreateDataCell(FormatStation(pvtSta), font));
+            table.AddCell(CreateDataCell(pvtElev.ToString("F2"), font));
+            table.AddCell(CreateDataCell(FormatGrade(gradeOutPct), font));
+            // Sight distance placeholder (user can supply actual values later)
+            table.AddCell(CreateDataCellNoBorder("SSD= --", font).SetBorderBottom(new SolidBorder(ColorConstants.BLACK,0.5f)).SetBorderLeft(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder("Middle Ord= --", font).SetBorderBottom(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder("Notes= -", font).SetBorderBottom(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder("", font).SetBorderBottom(new SolidBorder(ColorConstants.BLACK,0.5f)).SetBorderRight(new SolidBorder(ColorConstants.BLACK,0.5f)));
+        }
+
+        private string FormatGrade(double gradePercent)
+        {
+            return gradePercent.ToString("F3") + "%";
+        }
+
         private double SafeStartStation(AlignmentEntity entity)
         {
             try
@@ -3998,6 +4243,17 @@ namespace GeoTableReports
                 .SetPadding(1);
         }
 
+        // Left-aligned label cell for POINT column readability
+        private iText.Layout.Element.Cell CreateLabelCell(string text, PdfFont font, int rowspan = 1, int colspan = 1)
+        {
+            return new iText.Layout.Element.Cell(rowspan, colspan)
+                .Add(new Paragraph(text).SetFont(font).SetFontSize(6.5f))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetPadding(1);
+        }
+
         private void AddGeoTableTangentPdf(iText.Layout.Element.Table table, AlignmentLine line, CivDb.Alignment alignment, int index, PdfFont font)
         {
             if (line == null) return;
@@ -4005,7 +4261,8 @@ namespace GeoTableReports
             double x1 = 0, y1 = 0, z1 = 0;
             alignment.PointLocation(line.StartStation, 0, 0, ref x1, ref y1, ref z1);
             string bearing = FormatBearingDMS(line.Direction);
-            string pointLabel = (index == 0) ? "POT" : "PI";
+            // InRoads: first tangent start is POB, subsequent tangent starts show PI where applicable
+            string pointLabel = (index == 0) ? "POB" : "PI";
 
             table.AddCell(CreateDataCell("TANGENT", font));
             table.AddCell(CreateDataCell("", font));
@@ -4031,7 +4288,6 @@ namespace GeoTableReports
         {
             if (arc == null) return;
 
-            // Calculate curve properties
             double radius = Math.Abs(arc.Radius);
             double delta = arc.Length / radius;
             double tc = CalculateTangentDistance(radius, delta);
@@ -4041,70 +4297,41 @@ namespace GeoTableReports
             alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
             alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
 
-            // Get PI station and coordinates from arc properties
             double piStation = arc.PIStation;
-
-            // Try to get PI and Center coordinates from sub-entities
             double xPI = 0, yPI = 0, centerE = 0, centerN = 0;
             bool gotFromSubEntity = false;
-            string debugMessage = "";
 
             try
             {
-                debugMessage = $"SubEntityCount: {arc.SubEntityCount}";
-
-                // Access the first sub-entity which should be the arc itself
                 if (arc.SubEntityCount > 0)
                 {
                     var subEntity = arc[0];
-                    debugMessage += $" | SubEntity Type: {subEntity.GetType().Name}";
-
-                    if (subEntity is AlignmentSubEntityArc)
+                    if (subEntity is AlignmentSubEntityArc subEntityArc)
                     {
-                        var subEntityArc = subEntity as AlignmentSubEntityArc;
                         var piPoint = subEntityArc.PIPoint;
                         var centerPoint = subEntityArc.CenterPoint;
-
-                        xPI = piPoint.X;  // Easting
-                        yPI = piPoint.Y;  // Northing
-                        centerE = centerPoint.X;  // Easting
-                        centerN = centerPoint.Y;  // Northing
+                        xPI = piPoint.X;
+                        yPI = piPoint.Y;
+                        centerE = centerPoint.X;
+                        centerN = centerPoint.Y;
                         gotFromSubEntity = true;
-                        debugMessage += $" | SUCCESS: PI({xPI:F4},{yPI:F4}) CC({centerE:F4},{centerN:F4})";
-                    }
-                    else
-                    {
-                        debugMessage += " | FAILED: Not AlignmentSubEntityArc";
                     }
                 }
-                else
-                {
-                    debugMessage += " | FAILED: No sub-entities";
-                }
             }
-            catch (System.Exception ex)
-            {
-                gotFromSubEntity = false;
-                debugMessage += $" | EXCEPTION: {ex.Message}";
-            }
+            catch { gotFromSubEntity = false; }
 
-            // Fallback: calculate if sub-entity access failed
             if (!gotFromSubEntity)
             {
                 CalculateCurveCenter(arc, alignment, out centerN, out centerE);
                 double backTangentDir = arc.StartDirection - Math.PI;
                 xPI = x1 - tc * Math.Cos(backTangentDir);
                 yPI = y1 - tc * Math.Sin(backTangentDir);
-                debugMessage += $" | FALLBACK: PI({xPI:F4},{yPI:F4}) CC({centerE:F4},{centerN:F4})";
             }
-
-            // Debug message removed - ed not available in this context
-            // ed.WriteMessage($"\n[DEBUG PDF Curve {curveNumber}] {debugMessage}");
 
             string curveDir = arc.Clockwise ? "R" : "L";
             string curveLabel = $"{curveNumber}-{curveDir}";
 
-            // Row 1: ST (Start of Curve)
+            // Row 1: PC
             table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph("CURVE").SetFont(font).SetFontSize(8))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
@@ -4113,13 +4340,12 @@ namespace GeoTableReports
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
                 .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
-            table.AddCell(CreateDataCell("ST", font));
+            table.AddCell(CreateLabelCell("PC", font));
             table.AddCell(CreateDataCell(FormatStation(arc.StartStation), font));
             table.AddCell(CreateDataCell(FormatBearingDMS(arc.StartDirection), font));
             table.AddCell(CreateDataCell($"{y1:F4}", font));
             table.AddCell(CreateDataCell($"{x1:F4}", font));
 
-            // DATA row 1 - no inside borders, left and top border only
             table.AddCell(CreateDataCellNoBorder($"Δc = {FormatAngleDMS(delta)}", font)
                 .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
                 .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
@@ -4132,13 +4358,12 @@ namespace GeoTableReports
                 .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
 
             // Row 2: PI
-            table.AddCell(CreateDataCell("PI", font));
+            table.AddCell(CreateLabelCell("PI", font));
             table.AddCell(CreateDataCell(FormatStation(piStation), font));
             table.AddCell(CreateDataCell("", font));
             table.AddCell(CreateDataCell($"{yPI:F4}", font));
             table.AddCell(CreateDataCell($"{xPI:F4}", font));
 
-            // DATA row 2 - no inside borders, left border only
             table.AddCell(CreateDataCellNoBorder("V= -- MPH", font)
                 .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
             table.AddCell(CreateDataCellNoBorder("Ea= --\"", font));
@@ -4146,14 +4371,13 @@ namespace GeoTableReports
             table.AddCell(CreateDataCellNoBorder("Eu= --\"", font)
                 .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
 
-            // Row 3: CS
-            table.AddCell(CreateDataCell("CS", font));
+            // Row 3: PT
+            table.AddCell(CreateLabelCell("PT", font));
             table.AddCell(CreateDataCell(FormatStation(arc.EndStation), font));
             table.AddCell(CreateDataCell("", font));
             table.AddCell(CreateDataCell($"{y2:F4}", font));
             table.AddCell(CreateDataCell($"{x2:F4}", font));
 
-            // DATA row 3 - no inside borders, left and bottom border only
             table.AddCell(CreateDataCellNoBorder($"Tc= {FormatDistanceFeet(tc)}", font)
                 .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
                 .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
