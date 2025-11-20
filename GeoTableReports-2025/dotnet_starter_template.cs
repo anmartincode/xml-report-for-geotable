@@ -607,10 +607,15 @@ namespace GeoTableReports
                 try { length = tangent.Length; } catch { }
 
                 // Determine point labels
+                // First tangent starts with POB
                 if (index == 0)
                     writer.WriteLine($" POB {FormatStation(startStation),15} {startElevation,15:F2}");
+                else
+                    writer.WriteLine($" PVI {FormatStation(startStation),15} {startElevation,15:F2}");
 
-                writer.WriteLine($" PVI {FormatStation(endStation),15} {endElevation,15:F2}");
+                // End point label: PVC if last tangent (before curve), PVI otherwise
+                string endLabel = (index == totalCount - 1) ? "PVC" : "PVI";
+                writer.WriteLine($" {endLabel} {FormatStation(endStation),15} {endElevation,15:F2}");
                 writer.WriteLine($" Tangent Grade: {grade * 100,15:F3}");
                 writer.WriteLine($" Tangent Length: {length,15:F2}");
                 writer.WriteLine();
@@ -761,13 +766,22 @@ namespace GeoTableReports
         /// </summary>
         private void AddVerticalDataRow(Document document, string label, string station, double elevation, PdfFont font)
         {
-            iText.Layout.Element.Table dataTable = new iText.Layout.Element.Table(2);
+            // 3-column layout: [ LABEL | STATION | ELEVATION ]
+            iText.Layout.Element.Table dataTable = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(new float[] { 20f, 40f, 40f }));
             dataTable.SetWidth(UnitValue.CreatePercentValue(100));
+            dataTable.SetMarginLeft(10);
 
-            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{label}{station}").SetFont(font).SetFontSize(9))
+            // LABEL (left-aligned)
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(label).SetFont(font).SetFontSize(9))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT)
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+
+            // STATION (right-aligned)
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(station).SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
 
+            // ELEVATION (right-aligned with left divider)
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{elevation:F2}").SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
@@ -944,32 +958,11 @@ namespace GeoTableReports
 
                 writer.WriteLine("Element: Linear");
 
-                // InRoads: first tangent start POB, subsequent tangents use PI at end only
-                string startLabel = index == 0 ? "POB" : "PI";
-                writer.WriteLine($" {startLabel}  ( ) {FormatStation(line.StartStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
+                // Linear elements always use ST (Spiral to Tangent) and TS (Tangent to Spiral)
+                string startLabel = "ST  ";
+                string endLabel = "TS  ";
 
-                // Determine end point label based on what element type comes after this tangent
-                // We need to look ahead in the ORIGINAL alignment entities to see what follows this line
-                string endLabel = "PI  ";  // Default if nothing follows
-
-                // Find this line in the original alignment entities
-                for (int i = 0; i < alignment.Entities.Count; i++)
-                {
-                    if (alignment.Entities[i] == line)
-                    {
-                        // Check what comes next in the original alignment
-                        if (i < alignment.Entities.Count - 1)
-                        {
-                            var nextEntity = alignment.Entities[i + 1];
-                            if (nextEntity.EntityType == AlignmentEntityType.Spiral)
-                                endLabel = "TS  ";  // Tangent to Spiral
-                            else if (nextEntity.EntityType == AlignmentEntityType.Arc)
-                                endLabel = "PC  ";  // Point of Curvature (Tangent to Arc)
-                        }
-                        break;
-                    }
-                }
-
+                writer.WriteLine($" {startLabel}( ) {FormatStation(line.StartStation),15} {FormatWithProperRounding(y1, 4),15} {FormatWithProperRounding(x1, 4),15}");
                 writer.WriteLine($" {endLabel}( ) {FormatStation(line.EndStation),15} {FormatWithProperRounding(y2, 4),15} {FormatWithProperRounding(x2, 4),15}");
                 writer.WriteLine($" Tangent Direction: {bearing}");
                 writer.WriteLine($" Tangent Length: {FormatWithProperRounding(line.Length, 4),15}");
@@ -1759,22 +1752,21 @@ namespace GeoTableReports
                 Document document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
                 document.SetMargins(50, 50, 50, 50);
 
-                // Define fonts
-                PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
-                PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+                // Define fonts - using monospaced font for better alignment
+                PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.COURIER_BOLD);
+                PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.COURIER);
 
                 // Add title and header info
                 document.Add(new Paragraph($"Project Name: {projectName}")
-                    .SetFont(boldFont).SetFontSize(11));
+                    .SetFont(boldFont).SetFontSize(11).SetMarginBottom(2));
                 document.Add(new Paragraph(" Description:")
-                    .SetFont(normalFont).SetFontSize(10));
+                    .SetFont(normalFont).SetFontSize(10).SetMarginBottom(2));
                 document.Add(new Paragraph($"Horizontal Alignment Name: {alignment.Name}")
-                    .SetFont(normalFont).SetFontSize(10));
+                    .SetFont(normalFont).SetFontSize(10).SetMarginBottom(2));
                 document.Add(new Paragraph($" Description: {alignment.Description ?? ""}")
-                    .SetFont(normalFont).SetFontSize(10));
+                    .SetFont(normalFont).SetFontSize(10).SetMarginBottom(2));
                 document.Add(new Paragraph($" Style: {alignment.StyleName ?? "Default"}")
-                    .SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                    .SetFont(normalFont).SetFontSize(10).SetMarginBottom(8));
 
                 // Add column headers with subtle divider (left border) before numeric columns
                 iText.Layout.Element.Table headerTable = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(new float[] { 35f, 25f, 20f, 20f }));
@@ -1867,9 +1859,8 @@ namespace GeoTableReports
         {
             if (line == null)
             {
-                document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10));
-                document.Add(new Paragraph("Unable to read line data for this alignment element.").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10).SetMarginBottom(2));
+                document.Add(new Paragraph("Unable to read line data for this alignment element.").SetFont(normalFont).SetFontSize(10).SetMarginBottom(6));
                 return;
             }
 
@@ -1882,44 +1873,21 @@ namespace GeoTableReports
 
                 string bearing = FormatBearing(line.Direction);
 
-                document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10));
-                document.Add(new Paragraph("\n").SetFontSize(5));
+                document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10).SetMarginBottom(3));
 
-                // InRoads convention: POB (Point of Beginning) at first tangent start
-                AddHorizontalDataRow(document, "POB  ( ) ", FormatStation(line.StartStation), y1, x1, normalFont);
+                // Linear elements always use ST (Spiral to Tangent) and TS (Tangent to Spiral)
+                string startLabel = "ST  ( ) ";
+                string endLabel = "TS  ( ) ";
 
-                // Determine end point label based on what element type comes after this tangent
-                // We need to look ahead in the ORIGINAL alignment entities to see what follows this line
-                string endLabel = "PI  ( ) ";  // Default if nothing follows
-
-                // Find this line in the original alignment entities
-                for (int i = 0; i < alignment.Entities.Count; i++)
-                {
-                    if (alignment.Entities[i] == line)
-                    {
-                        // Check what comes next in the original alignment
-                        if (i < alignment.Entities.Count - 1)
-                        {
-                            var nextEntity = alignment.Entities[i + 1];
-                            if (nextEntity.EntityType == AlignmentEntityType.Spiral)
-                                endLabel = "TS  ( ) ";  // Tangent to Spiral
-                            else if (nextEntity.EntityType == AlignmentEntityType.Arc)
-                                endLabel = "PC  ( ) ";  // Point of Curvature (Tangent to Arc)
-                        }
-                        break;
-                    }
-                }
-
+                AddHorizontalDataRow(document, startLabel, FormatStation(line.StartStation), y1, x1, normalFont);
                 AddHorizontalDataRow(document, endLabel, FormatStation(line.EndStation), y2, x2, normalFont);
-                document.Add(new Paragraph($"Tangent Direction: {bearing}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Tangent Length: {line.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph("\n").SetFontSize(5));
+                document.Add(new Paragraph($"Tangent Direction: {bearing}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Tangent Length: {line.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(6));
             }
             catch (System.Exception ex)
             {
-                document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10));
-                document.Add(new Paragraph($"Error writing line data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                document.Add(new Paragraph("Element: Linear").SetFont(boldFont).SetFontSize(10).SetMarginBottom(2));
+                document.Add(new Paragraph($"Error writing line data: {ex.Message}").SetFont(normalFont).SetFontSize(10).SetMarginBottom(6));
             }
         }
 
@@ -1927,9 +1895,8 @@ namespace GeoTableReports
         {
             if (arc == null)
             {
-                document.Add(new Paragraph("Element: Circular").SetFont(boldFont).SetFontSize(10));
-                document.Add(new Paragraph("Unable to read arc data for this alignment element.").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                document.Add(new Paragraph("Element: Circular").SetFont(boldFont).SetFontSize(10).SetMarginBottom(2));
+                document.Add(new Paragraph("Unable to read arc data for this alignment element.").SetFont(normalFont).SetFontSize(10).SetMarginBottom(6));
                 return;
             }
 
@@ -1990,33 +1957,30 @@ namespace GeoTableReports
                 double middleOrdinate = arc.Radius * (1 - Math.Cos(Math.Abs(deltaRadians) / 2));
                 double external = arc.Radius * (1 / Math.Cos(Math.Abs(deltaRadians) / 2) - 1);
 
-                document.Add(new Paragraph("Element: Circular").SetFont(boldFont).SetFontSize(10));
-                document.Add(new Paragraph("\n").SetFontSize(5));
+                document.Add(new Paragraph("Element: Circular").SetFont(boldFont).SetFontSize(10).SetMarginBottom(3));
 
                 AddHorizontalDataRow(document, "PC  ( ) ", FormatStation(arc.StartStation), y1, x1, normalFont);
                 AddHorizontalDataRow(document, "PI  ( ) ", FormatStation(piStation), yPI, xPI, normalFont);
                 AddHorizontalDataRow(document, "CC  ( ) ", "               ", yc, xc, normalFont);
                 AddHorizontalDataRow(document, "PT  ( ) ", FormatStation(arc.EndStation), y2, x2, normalFont);
 
-                document.Add(new Paragraph($"Radius: {arc.Radius:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Design Speed(mph): {50.0:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Cant(inches): {2.0:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Radius: {arc.Radius:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Design Speed(mph): {50.0:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Cant(inches): {2.0:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
                 double degreeOfCurvatureChord = (100.0 * deltaRadians) / (arc.Length) * (180.0 / Math.PI);
-                document.Add(new Paragraph($"Degree of Curvature(Chord): {FormatAngle(degreeOfCurvatureChord)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Length: {arc.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Length(Chorded): {arc.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Tangent: {tangent:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Chord: {chord:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Middle Ordinate: {middleOrdinate:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"External: {external:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph("\n").SetFontSize(5));
+                document.Add(new Paragraph($"Degree of Curvature(Chord): {FormatAngle(degreeOfCurvatureChord)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Length: {arc.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Length(Chorded): {arc.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Tangent: {tangent:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Chord: {chord:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Middle Ordinate: {middleOrdinate:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"External: {external:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(6));
             }
             catch (System.Exception ex)
             {
-                document.Add(new Paragraph("Element: Circular").SetFont(boldFont).SetFontSize(10));
-                document.Add(new Paragraph($"Error writing arc data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                document.Add(new Paragraph("Element: Circular").SetFont(boldFont).SetFontSize(10).SetMarginBottom(2));
+                document.Add(new Paragraph($"Error writing arc data: {ex.Message}").SetFont(normalFont).SetFontSize(10).SetMarginBottom(6));
             }
         }
 
@@ -2349,20 +2313,19 @@ namespace GeoTableReports
                     Document document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
                     document.SetMargins(50, 50, 50, 50);
 
-                    // Define fonts
-                    PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
-                    PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+                    // Define fonts - using monospaced font for better alignment
+                    PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.COURIER_BOLD);
+                    PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.COURIER);
 
                     // Write header
-                    document.Add(new Paragraph($"Project Name: {projectName}").SetFont(boldFont).SetFontSize(11));
-                    document.Add(new Paragraph(" Description:").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph($"Horizontal Alignment Name: {alignmentName}").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph($" Description: {alignmentDescription}").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph($" Style: {alignmentStyle}").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph($"Vertical Alignment Name: {profileName}").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph($" Description: {profileDescription}").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph($" Style: {profileStyle}").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph("\n"));
+                    document.Add(new Paragraph($"Project Name: {projectName}").SetFont(boldFont).SetFontSize(11).SetMarginBottom(2));
+                    document.Add(new Paragraph(" Description:").SetFont(normalFont).SetFontSize(10).SetMarginBottom(2));
+                    document.Add(new Paragraph($"Horizontal Alignment Name: {alignmentName}").SetFont(normalFont).SetFontSize(10).SetMarginBottom(2));
+                    document.Add(new Paragraph($" Description: {alignmentDescription}").SetFont(normalFont).SetFontSize(10).SetMarginBottom(2));
+                    document.Add(new Paragraph($" Style: {alignmentStyle}").SetFont(normalFont).SetFontSize(10).SetMarginBottom(2));
+                    document.Add(new Paragraph($"Vertical Alignment Name: {profileName}").SetFont(normalFont).SetFontSize(10).SetMarginBottom(2));
+                    document.Add(new Paragraph($" Description: {profileDescription}").SetFont(normalFont).SetFontSize(10).SetMarginBottom(2));
+                    document.Add(new Paragraph($" Style: {profileStyle}").SetFont(normalFont).SetFontSize(10).SetMarginBottom(8));
 
                     // Add column headers
                     iText.Layout.Element.Table headerTable = new iText.Layout.Element.Table(2);
@@ -2433,14 +2396,12 @@ namespace GeoTableReports
             {
                 if (tangent == null)
                 {
-                    document.Add(new Paragraph("Element: Linear").SetFont(labelFont).SetFontSize(10));
-                    document.Add(new Paragraph("Unable to read tangent data for this profile element.").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph("\n"));
+                    document.Add(new Paragraph("Element: Linear").SetFont(labelFont).SetFontSize(10).SetMarginBottom(2));
+                    document.Add(new Paragraph("Unable to read tangent data for this profile element.").SetFont(normalFont).SetFontSize(10).SetMarginBottom(6));
                     return;
                 }
 
-                document.Add(new Paragraph("Element: Linear").SetFont(labelFont).SetFontSize(10));
-                document.Add(new Paragraph("\n").SetFontSize(5));
+                document.Add(new Paragraph("Element: Linear").SetFont(labelFont).SetFontSize(10).SetMarginBottom(3));
 
                 // Get properties safely
                 double startStation = 0;
@@ -2458,19 +2419,22 @@ namespace GeoTableReports
                 try { length = tangent.Length; } catch { }
 
                 // Determine point labels
+                // First tangent starts with POB
                 if (index == 0)
                     AddVerticalDataRow(document, "POB ", FormatStation(startStation), startElevation, normalFont);
+                else
+                    AddVerticalDataRow(document, "PVI ", FormatStation(startStation), startElevation, normalFont);
 
-                AddVerticalDataRow(document, "PVI ", FormatStation(endStation), endElevation, normalFont);
-                document.Add(new Paragraph($"Tangent Grade: {grade * 100:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Tangent Length: {length:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph("\n").SetFontSize(5));
+                // End point label: PVC if last tangent (before curve), PVI otherwise
+                string endLabel = (index == totalCount - 1) ? "PVC " : "PVI ";
+                AddVerticalDataRow(document, endLabel, FormatStation(endStation), endElevation, normalFont);
+                document.Add(new Paragraph($"Tangent Grade: {grade * 100:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Tangent Length: {length:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(6));
             }
             catch (System.Exception ex)
             {
-                document.Add(new Paragraph("Element: Linear").SetFont(labelFont).SetFontSize(10));
-                document.Add(new Paragraph($"Error writing tangent data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                document.Add(new Paragraph("Element: Linear").SetFont(labelFont).SetFontSize(10).SetMarginBottom(2));
+                document.Add(new Paragraph($"Error writing tangent data: {ex.Message}").SetFont(normalFont).SetFontSize(10).SetMarginBottom(6));
             }
         }
 
@@ -2480,9 +2444,8 @@ namespace GeoTableReports
             {
                 if (curve == null)
                 {
-                    document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10));
-                    document.Add(new Paragraph("Unable to read curve data for this profile element.").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph("\n"));
+                    document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10).SetMarginBottom(2));
+                    document.Add(new Paragraph("Unable to read curve data for this profile element.").SetFont(normalFont).SetFontSize(10).SetMarginBottom(6));
                     return;
                 }
 
@@ -2534,42 +2497,38 @@ namespace GeoTableReports
                     pvtElevation = pviElevation + (gradeOutDecimal * (length / 2));
                 }
 
-                document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10));
-                document.Add(new Paragraph("\n").SetFontSize(5));
+                document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10).SetMarginBottom(3));
 
                 AddVerticalDataRow(document, "PVC ", FormatStation(startStation), pvcElevation, normalFont);
                 AddVerticalDataRow(document, "PVI ", FormatStation(pviStation), pviElevation, normalFont);
                 AddVerticalDataRow(document, "PVT ", FormatStation(endStation), pvtElevation, normalFont);
 
-                document.Add(new Paragraph($"Length: {length:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Length: {length:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
 
                 double gradeChange = Math.Abs(gradeDiff);
                 if (gradeChange > 1.0)
-                    document.Add(new Paragraph($"Stopping Sight Distance: {571.52:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph($"Stopping Sight Distance: {571.52:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
                 else
-                    document.Add(new Paragraph($"Headlight Sight Distance: {540.41:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph($"Headlight Sight Distance: {540.41:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
 
-                document.Add(new Paragraph($"Entrance Grade: {gradeIn:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Exit Grade: {gradeOut:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"r = ( g2 - g1 ) / L: {r:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Entrance Grade: {gradeIn:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Exit Grade: {gradeOut:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"r = ( g2 - g1 ) / L: {r:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
                 string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F3") : "INF";
-                document.Add(new Paragraph($"K = l / ( g2 - g1 ): {kDisplay}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Middle Ordinate: {middleOrdinate:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph("\n").SetFontSize(5));
+                document.Add(new Paragraph($"K = l / ( g2 - g1 ): {kDisplay}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(1));
+                document.Add(new Paragraph($"Middle Ordinate: {middleOrdinate:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10).SetMarginBottom(6));
             }
             catch (System.Exception ex)
             {
-                document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10));
-                document.Add(new Paragraph($"Error writing curve data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph("\n"));
+                document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10).SetMarginBottom(2));
+                document.Add(new Paragraph($"Error writing curve data: {ex.Message}").SetFont(normalFont).SetFontSize(10).SetMarginBottom(6));
             }
         }
 
         private void WriteUnsupportedProfileEntityPdf(Document document, ProfileEntity entity, PdfFont normalFont)
         {
-            document.Add(new Paragraph($"Element: {entity?.EntityType.ToString() ?? "Unknown"}").SetFont(normalFont).SetFontSize(10));
-            document.Add(new Paragraph("Unsupported profile entity type encountered.").SetFont(normalFont).SetFontSize(10));
-            document.Add(new Paragraph("\n"));
+            document.Add(new Paragraph($"Element: {entity?.EntityType.ToString() ?? "Unknown"}").SetFont(normalFont).SetFontSize(10).SetMarginBottom(2));
+            document.Add(new Paragraph("Unsupported profile entity type encountered.").SetFont(normalFont).SetFontSize(10).SetMarginBottom(6));
         }
 
         /// <summary>
@@ -2859,7 +2818,9 @@ namespace GeoTableReports
                 alignment.PointLocation(line.EndStation, 0, 0, ref x2, ref y2, ref z2);
 
                 string bearing = FormatBearing(line.Direction);
-                string pointLabel = (index == 0) ? "POB" : "PI"; // InRoads: first tangent start POB
+
+                // Linear elements always use ST (Spiral to Tangent)
+                string pointLabel = "ST";
 
                 // Start point
                 ws.Cells[row, 1].Value = "TANGENT";
@@ -3090,22 +3051,21 @@ namespace GeoTableReports
             {
                 double grade = tangent.Grade * 100;
 
-                // Start point
-                if (index == 0)
-                {
-                    ws.Cells[row, 1].Value = "TANGENT";
-                    ws.Cells[row, 2].Value = "POB";
-                    ws.Cells[row, 3].Value = FormatStation(tangent.StartStation);
-                    ws.Cells[row, 4].Value = tangent.StartElevation;
-                    ws.Cells[row, 4].Style.Numberformat.Format = "0.00";
-                    ws.Cells[row, 5].Value = $"{grade:F3}%";
-                    ws.Cells[row, 6].Value = $"L = {tangent.Length:F2}";
-                    row++;
-                }
-
-                // End point (PVI)
+                // Start point - POB for first tangent, PVI for subsequent
+                string startLabel = (index == 0) ? "POB" : "PVI";
                 ws.Cells[row, 1].Value = "TANGENT";
-                ws.Cells[row, 2].Value = "PVI";
+                ws.Cells[row, 2].Value = startLabel;
+                ws.Cells[row, 3].Value = FormatStation(tangent.StartStation);
+                ws.Cells[row, 4].Value = tangent.StartElevation;
+                ws.Cells[row, 4].Style.Numberformat.Format = "0.00";
+                ws.Cells[row, 5].Value = $"{grade:F3}%";
+                ws.Cells[row, 6].Value = $"L = {tangent.Length:F2}";
+                row++;
+
+                // End point - PVC if last tangent (before curve), PVI otherwise
+                string endLabel = (index == totalCount - 1) ? "PVC" : "PVI";
+                ws.Cells[row, 1].Value = "TANGENT";
+                ws.Cells[row, 2].Value = endLabel;
                 ws.Cells[row, 3].Value = FormatStation(tangent.EndStation);
                 ws.Cells[row, 4].Value = tangent.EndElevation;
                 ws.Cells[row, 4].Style.Numberformat.Format = "0.00";
