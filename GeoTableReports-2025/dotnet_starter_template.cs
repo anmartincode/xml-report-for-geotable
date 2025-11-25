@@ -3694,10 +3694,10 @@ namespace GeoTableReports
                 ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 2: PI - show PI Station
+                // Row 2: PI - show PI Station (no bearing per InRails standard)
                 ws.Cells[row, 3].Value = "PI";
                 ws.Cells[row, 4].Value = FormatStation(piStation);
-                ws.Cells[row, 5].Value = ""; // Empty bearing for PI
+                ws.Cells[row, 5].Value = ""; // Empty bearing column for PI
                 ws.Cells[row, 6].Value = yPI;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
                 ws.Cells[row, 7].Value = xPI;
@@ -3725,9 +3725,10 @@ namespace GeoTableReports
                 ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 3: PT (End of Curve per InRoads) - merge empty cell (column 5)
+                // Row 3: PT (End of Curve per InRoads) - empty bearing per InRails standard
                 ws.Cells[row, 3].Value = "PT";
                 ws.Cells[row, 4].Value = FormatStation(arc.EndStation);
+                ws.Cells[row, 5].Value = ""; // Empty bearing column for PT
                 ws.Cells[row, 5].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 6].Value = y2;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
@@ -3853,6 +3854,20 @@ namespace GeoTableReports
                 alignment.PointLocation(startStation, 0, 0, ref x1, ref y1, ref z1);
                 alignment.PointLocation(endStation, 0, 0, ref x2, ref y2, ref z2);
 
+                // Determine entry/exit classification for labels
+                bool isEntry = double.IsInfinity(radiusIn) || radiusIn == 0 || radiusIn > radiusOut;
+                string startLabel = isEntry ? "TS" : "CS";
+                string endLabel = isEntry ? "SC" : "ST";
+                
+                // Calculate tangent direction at end for ST bearing (exit spiral to tangent)
+                double tangentDirEnd = 0;
+                if (endLabel == "ST")
+                {
+                    double x3 = 0, y3 = 0, z3 = 0;
+                    alignment.PointLocation(endStation + 0.01, 0, 0, ref x3, ref y3, ref z3);
+                    tangentDirEnd = Math.Atan2(y3 - y2, x3 - x2);
+                }
+
                 // Calculate spiral parameters
                 double spiralLength = length;
                 // Use actual radius from spiral if available, otherwise default
@@ -3863,9 +3878,9 @@ namespace GeoTableReports
                 double p = ys;  // Simplified
                 double k = spiralLength / 2.0;  // Simplified
 
-                // Row 1: TS/ST
+                // Row 1: TS (entry) or CS (exit) start point
                 ws.Cells[row, 1].Value = gotFromSubEntity ? "SPIRAL (SubEntity)" : "SPIRAL";
-                ws.Cells[row, 3].Value = "TS";
+                ws.Cells[row, 3].Value = startLabel; // Dynamic: TS or CS
                 ws.Cells[row, 4].Value = FormatStation(startStation);
                 // If startDirection wasn't available, compute from local tangent
                 if (Math.Abs(startDirection) < 1e-6)
@@ -3901,9 +3916,11 @@ namespace GeoTableReports
                 ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 2: Parameters - merge empty cell (column 5)
-                ws.Cells[row, 3].Value = "ST";
+                // Row 2: End point (ST for exit spiral has bearing, SC for entry spiral is empty)
+                ws.Cells[row, 3].Value = endLabel; // Dynamic: ST or SC
                 ws.Cells[row, 4].Value = FormatStation(endStation);
+                // ST (exit spiral end) shows bearing, SC (entry spiral end) is empty
+                ws.Cells[row, 5].Value = (endLabel == "ST") ? FormatBearingDMS(tangentDirEnd) : "";
                 ws.Cells[row, 5].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 6].Value = y2;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
@@ -4395,12 +4412,12 @@ namespace GeoTableReports
                 .SetPadding(1);
         }
 
-        // Left-aligned label cell for POINT column readability
+        // Center-aligned label cell for POINT column per InRails standard
         private iText.Layout.Element.Cell CreateLabelCell(string text, PdfFont font, int rowspan = 1, int colspan = 1)
         {
             return new iText.Layout.Element.Cell(rowspan, colspan)
                 .Add(new Paragraph(text).SetFont(font).SetFontSize(6.5f))
-                .SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT)
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER) // Changed to CENTER per markup
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                 .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f))
                 .SetPadding(1);
@@ -4509,10 +4526,10 @@ namespace GeoTableReports
                 .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
                 .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
 
-            // Row 2: PI
+            // Row 2: PI (no bearing per InRails standard)
             table.AddCell(CreateLabelCell("PI", font));
             table.AddCell(CreateDataCell(FormatStation(piStation), font));
-            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell("", font)); // Empty bearing column for PI
             table.AddCell(CreateDataCell($"{yPI:F4}", font));
             table.AddCell(CreateDataCell($"{xPI:F4}", font));
 
@@ -4523,10 +4540,10 @@ namespace GeoTableReports
             table.AddCell(CreateDataCellNoBorder("Eu= --\"", font)
                 .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
 
-            // Row 3: PT
+            // Row 3: PT (no bearing per InRails standard)
             table.AddCell(CreateLabelCell("PT", font));
             table.AddCell(CreateDataCell(FormatStation(arc.EndStation), font));
-            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell("", font)); // Empty bearing column for PT
             table.AddCell(CreateDataCell($"{y2:F4}", font));
             table.AddCell(CreateDataCell($"{x2:F4}", font));
 
@@ -4726,10 +4743,10 @@ namespace GeoTableReports
                     .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
                     .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
 
-                // Row 2: SPI
+                // Row 2: SPI (no bearing per InRails standard)
                 table.AddCell(CreateDataCell("SPI", font));
                 table.AddCell(CreateDataCell(FormatStation(spiralPIStation), font));
-                table.AddCell(CreateDataCell("", font));
+                table.AddCell(CreateDataCell("", font)); // Empty bearing column for SPI
                 table.AddCell(CreateDataCell($"{ySPI:F4}", font));
                 table.AddCell(CreateDataCell($"{xSPI:F4}", font));
 
@@ -4741,10 +4758,12 @@ namespace GeoTableReports
                 table.AddCell(CreateDataCellNoBorder($"LC= {FormatDistanceFeet(chordLength)}", font)
                     .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
 
-                // Row 3: End point (SC or ST)
+                // Row 3: End point (SC or ST) - ST shows bearing, SC is empty per InRails
                 table.AddCell(CreateDataCell(endLabel, font));
                 table.AddCell(CreateDataCell(FormatStation(endStation), font));
-                table.AddCell(CreateDataCell(FormatBearingDMS(tangentDirEnd), font));
+                // Only ST (exit spiral end to tangent) shows bearing; SC (entry spiral end to curve) is empty
+                string endBearing = (endLabel == "ST") ? FormatBearingDMS(tangentDirEnd) : "";
+                table.AddCell(CreateDataCell(endBearing, font));
                 table.AddCell(CreateDataCell($"{y2:F4}", font));
                 table.AddCell(CreateDataCell($"{x2:F4}", font));
 
