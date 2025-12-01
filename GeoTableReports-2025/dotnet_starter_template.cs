@@ -2285,7 +2285,8 @@ namespace GeoTableReports
                     // Fallback: Calculate Start Direction (tangent at spiral start)
                     double tempXStart = 0, tempYStart = 0, tempZStart = 0;
                     alignment.PointLocation(startStation + 0.01, 0, 0, ref tempXStart, ref tempYStart, ref tempZStart);
-                    startTangentDirection = Math.Atan2(tempYStart - y1, tempXStart - x1);
+                    // Use Atan2(dx, dy) for Azimuth (0=N, 90=E) to match FormatBearingDMS expectation
+                    startTangentDirection = Math.Atan2(tempXStart - x1, tempYStart - y1);
                 }
                 
                 if (endDirection_API != 0)
@@ -2297,11 +2298,13 @@ namespace GeoTableReports
                     // Fallback: Calculate End Direction (tangent at spiral end)
                     double tempXEnd = 0, tempYEnd = 0, tempZEnd = 0;
                     alignment.PointLocation(endStation - 0.01, 0, 0, ref tempXEnd, ref tempYEnd, ref tempZEnd);
-                    endTangentDirection = Math.Atan2(y2 - tempYEnd, x2 - tempXEnd);
+                    // Use Atan2(dx, dy) for Azimuth
+                    endTangentDirection = Math.Atan2(x2 - tempXEnd, y2 - tempYEnd);
                 }
                 
                 // Chord Direction (straight line from start to end)
-                double chordDirectionAngle = Math.Atan2(y2 - y1, x2 - x1);
+                // Use Atan2(dx, dy) for Azimuth (0=N, 90=E) to match FormatBearingDMS expectation
+                double chordDirectionAngle = Math.Atan2(x2 - x1, y2 - y1);
 
                 // Header
                 document.Add(new Paragraph("Element: Clothoid").SetFont(labelFont).SetFontSize(10).SetBold());
