@@ -523,7 +523,6 @@ namespace GeoTableReports
                     {
                         // Write header
                         writer.WriteLine($"Project Name: {projectName}");
-                        writer.WriteLine($" Description:");
                         writer.WriteLine($"Horizontal Alignment Name: {alignmentName}");
                         writer.WriteLine($" Description: {alignmentDescription}");
                         writer.WriteLine($" Style: {alignmentStyle}");
@@ -742,7 +741,8 @@ namespace GeoTableReports
             // STATION (right-aligned under the STATION header)
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(station).SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
-                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f)));
 
             // NORTHING with left-divider
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatWithProperRounding(northing, 4)).SetFont(font).SetFontSize(9))
@@ -753,7 +753,8 @@ namespace GeoTableReports
             // EASTING
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatWithProperRounding(easting, 4)).SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
-                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f)));
 
             document.Add(dataTable);
         }
@@ -804,7 +805,6 @@ namespace GeoTableReports
                 {
                     // Write header
                     writer.WriteLine($"Project Name: {projectName}");
-                    writer.WriteLine($" Description:");
                     writer.WriteLine($"Horizontal Alignment Name: {alignment.Name}");
                     writer.WriteLine($" Description: {alignment.Description ?? ""}");
                     writer.WriteLine($" Style: {alignment.StyleName ?? "Default"}");
@@ -1785,8 +1785,6 @@ namespace GeoTableReports
                 // Add title and header info
                 document.Add(new Paragraph($"Project Name: {projectName}")
                     .SetFont(boldFont).SetFontSize(11));
-                document.Add(new Paragraph(" Description:")
-                    .SetFont(normalFont).SetFontSize(10));
                 document.Add(new Paragraph($"Horizontal Alignment Name: {alignment.Name}")
                     .SetFont(normalFont).SetFontSize(10));
                 document.Add(new Paragraph($" Description: {alignment.Description ?? ""}")
@@ -1813,7 +1811,8 @@ namespace GeoTableReports
                 iText.Layout.Element.Cell cell1 = new iText.Layout.Element.Cell().Add(new Paragraph("STATION")
                     .SetFont(boldFont).SetFontSize(10))
                     .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
-                    .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+                    .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                    .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f));
                 headerTable.AddCell(cell1);
 
                 // NORTHING header
@@ -1828,7 +1827,8 @@ namespace GeoTableReports
                 iText.Layout.Element.Cell cell3 = new iText.Layout.Element.Cell().Add(new Paragraph("EASTING")
                     .SetFont(boldFont).SetFontSize(10))
                     .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
-                    .SetBorder(iText.Layout.Borders.Border.NO_BORDER);
+                    .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                    .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f));
                 headerTable.AddCell(cell3);
 
                 document.Add(headerTable);
@@ -2464,7 +2464,6 @@ namespace GeoTableReports
 
                     // Write header
                     document.Add(new Paragraph($"Project Name: {projectName}").SetFont(boldFont).SetFontSize(11));
-                    document.Add(new Paragraph(" Description:").SetFont(normalFont).SetFontSize(10));
                     document.Add(new Paragraph($"Horizontal Alignment Name: {alignmentName}").SetFont(normalFont).SetFontSize(10));
                     document.Add(new Paragraph($" Description: {alignmentDescription}").SetFont(normalFont).SetFontSize(10));
                     document.Add(new Paragraph($" Style: {alignmentStyle}").SetFont(normalFont).SetFontSize(10));
