@@ -4693,28 +4693,22 @@ namespace GeoTableReports
                 // If neither (e.g. Spiral-Spiral or Tangent-Spiral-Tangent), default to showing Start (TS)
                 if (!showStart && !showEnd) showStart = true;
 
-                // Create nested table for Data block (3 rows x 4 columns)
+                // Create nested table for Data block (2 rows x 4 columns)
                 iText.Layout.Element.Table dataTable = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(new float[] { 1, 1, 1, 1 }));
                 dataTable.SetWidth(UnitValue.CreatePercentValue(100));
                 dataTable.SetFixedLayout();
                 
                 // Row 1 Data
-                dataTable.AddCell(CreateDataCellNoBorder($"R In= {(double.IsInfinity(radiusIn) ? "0.0000" : radiusIn.ToString("F4"))}", font));
-                dataTable.AddCell(CreateDataCellNoBorder($"R Out= {(double.IsInfinity(radiusOut) ? "0.0000" : radiusOut.ToString("F4"))}", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"θs = {FormatAngleDMS(thetaS_rad)}", font));
                 dataTable.AddCell(CreateDataCellNoBorder($"Ls= {length:F2}'", font));
-                dataTable.AddCell(CreateDataCellNoBorder($"s= {FormatAngleDMS(thetaS_rad)}", font)); // Using 's' for theta_s per markup
+                dataTable.AddCell(CreateDataCellNoBorder($"LT= {LT:F2}'", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"STs= {ST:F2}'", font));
                 
                 // Row 2 Data
-                dataTable.AddCell(CreateDataCellNoBorder($"K= {K:F4}", font));
-                dataTable.AddCell(CreateDataCellNoBorder($"LT= {LT:F2}'", font));
-                dataTable.AddCell(CreateDataCellNoBorder($"ST= {ST:F2}'", font));
-                dataTable.AddCell(CreateDataCellNoBorder($"LC= {LC:F2}'", font));
-                
-                // Row 3 Data
-                dataTable.AddCell(CreateDataCellNoBorder($"Xs= {Xs:F4}", font));
-                dataTable.AddCell(CreateDataCellNoBorder($"Ys= {Ys:F4}", font));
-                dataTable.AddCell(CreateDataCellNoBorder($"P= {P:F4}", font));
-                dataTable.AddCell(CreateDataCellNoBorder($"Chord: {chordBearing}", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"Xs= {Xs:F2}'", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"Ys= {Ys:F2}'", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"P= {P:F2}'", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"K= {K:F2}'", font));
 
                 // Create a cell that wraps the data table
                 iText.Layout.Element.Cell dataCell = new iText.Layout.Element.Cell(1, 4)
