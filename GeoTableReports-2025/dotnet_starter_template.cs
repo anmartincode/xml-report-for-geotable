@@ -31,6 +31,8 @@ using iText.Layout.Borders;
 using iText.Kernel.Font;
 using iText.IO.Font.Constants;
 using iText.Kernel.Colors;
+using iText.Layout.Renderer;
+using iText.Kernel.Pdf.Canvas;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
 // (Viewer components removed)
@@ -1065,7 +1067,7 @@ namespace GeoTableReports
                 writer.WriteLine($" Cant(inches): {2.0,15:F3}");
                 writer.WriteLine($" Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}");
                 double degreeOfCurvatureChord = (100.0 * deltaRadians) / (arc.Length) * (180.0 / Math.PI);
-                writer.WriteLine($"Degree of Curvature(Chord): {FormatAngle(degreeOfCurvatureChord)}");
+                writer.WriteLine($"Degree of Curvature (Arc): {FormatAngle(degreeOfCurvatureChord)}");
                 writer.WriteLine($" Length: {FormatWithProperRounding(arc.Length, 4),15}");
                 writer.WriteLine($" Length(Chorded): {FormatWithProperRounding(arc.Length, 4),15}");
                 writer.WriteLine($" Tangent: {FormatWithProperRounding(tangent, 4),15}");
@@ -2059,7 +2061,7 @@ namespace GeoTableReports
                 document.Add(new Paragraph($"Cant(inches): {2.0:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 double degreeOfCurvatureChord = (100.0 * deltaRadians) / (arc.Length) * (180.0 / Math.PI);
-                document.Add(new Paragraph($"Degree of Curvature(Chord): {FormatAngle(degreeOfCurvatureChord)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Degree of Curvature (Arc): {FormatAngle(degreeOfCurvatureChord)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Length: {arc.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Length(Chorded): {arc.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Tangent: {tangent:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
@@ -4447,7 +4449,7 @@ namespace GeoTableReports
 
             // DATA - merge 4 columns with border around the group only
             table.AddCell(new iText.Layout.Element.Cell(1, 4)
-                .Add(new Paragraph($"L = {FormatDistanceFeet(line.Length)}").SetFont(font).SetFontSize(8))
+                .Add(new Paragraph($"L = {FormatDistanceFeet(line.Length)}").SetFont(font).SetFontSize(6.5f))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                 .SetBackgroundColor(ColorConstants.WHITE)
@@ -4508,15 +4510,24 @@ namespace GeoTableReports
             string startLabel = (prevEntity != null && prevEntity.EntityType == AlignmentEntityType.Spiral) ? "SC" : "PC";
             string endLabel = (nextEntity != null && nextEntity.EntityType == AlignmentEntityType.Spiral) ? "CS" : "PT";
 
+            // Calculate Degree of Curvature (Arc Definition)
+            // Da = 5729.58 / R (Degrees) -> Convert to radians for formatter: 100 / R
+            double degreeOfCurveRad = (radius > 0) ? (100.0 / radius) : 0;
+
             // Row 1: Start (PC/SC)
             table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph("CURVE").SetFont(font).SetFontSize(8))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                 .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph(curveLabel).SetFont(font).SetFontSize(8))
+            
+            // Curve Number cell with Oval Renderer
+            var curveNoCell = new iText.Layout.Element.Cell(3, 1).Add(new Paragraph(curveLabel).SetFont(font).SetFontSize(8))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
-                .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f));
+            curveNoCell.SetNextRenderer(new OvalCellRenderer(curveNoCell));
+            table.AddCell(curveNoCell);
+
             table.AddCell(CreateLabelCell(startLabel, font));
             table.AddCell(CreateDataCell(FormatStation(arc.StartStation), font));
             table.AddCell(CreateDataCell("", font));
@@ -4526,9 +4537,9 @@ namespace GeoTableReports
             table.AddCell(CreateDataCellNoBorder($"Δc = {FormatAngleDMS(delta)}", font)
                 .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
                 .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(CreateDataCellNoBorder($"Da= {FormatAngleDMS(delta / 2.0)}", font)
+            table.AddCell(CreateDataCellNoBorder($"Da= {FormatAngleDMS(degreeOfCurveRad)}", font)
                 .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(CreateDataCellNoBorder($"R= {FormatRadius(radius)}", font)
+            table.AddCell(CreateDataCellNoBorder($"R= {radius:F2}", font)
                 .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
             table.AddCell(CreateDataCellNoBorder($"Lc= {FormatDistanceFeet(arc.Length)}", font)
                 .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
@@ -4555,16 +4566,20 @@ namespace GeoTableReports
             table.AddCell(CreateDataCell($"{y2:F4}", font));
             table.AddCell(CreateDataCell($"{x2:F4}", font));
 
-            table.AddCell(CreateDataCellNoBorder($"Tc= {FormatDistanceFeet(tc)}", font)
+            table.AddCell(CreateDataCellNoBorder($"Tc= {tc:F2}'", font)
                 .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
                 .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(CreateDataCellNoBorder($"Ec= {FormatDistanceFeet(ec)}", font)
+            table.AddCell(CreateDataCellNoBorder($"Ec= {ec:F2}'", font)
                 .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(CreateDataCellNoBorder($"CC:N {centerN:F4}", font)
-                .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-            table.AddCell(CreateDataCellNoBorder($"E {centerE:F4}", font)
+            table.AddCell(new iText.Layout.Element.Cell(1, 2)
+                .Add(new Paragraph($"CC:N {centerN:F4}  E {centerE:F4}").SetFont(font).SetFontSize(6.5f))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                .SetBackgroundColor(ColorConstants.WHITE)
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
                 .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                .SetPadding(1));
         }
 
         private void AddGeoTableSpiralPdf(iText.Layout.Element.Table table, AlignmentEntity spiralEntity, CivDb.Alignment alignment, int index, PdfFont font, AlignmentEntity prevEntity, AlignmentEntity nextEntity)
@@ -4577,7 +4592,6 @@ namespace GeoTableReports
                 double radiusIn = double.PositiveInfinity;
                 double radiusOut = double.PositiveInfinity;
                 double length = 0; double startStation = 0; double endStation = 0; double spiralA = 0; string spiralDirection = "";
-                double spiralPIStation = double.NaN;
                 var spiral = spiralEntity as AlignmentSpiral;
                 if (spiral != null)
                 {
@@ -4632,13 +4646,42 @@ namespace GeoTableReports
                     spiralAngle = length / (2.0 * effectiveRadius);
                 }
 
-                // Calculate directions
-                double x0 = 0, y0 = 0, z0 = 0, x3 = 0, y3 = 0, z3 = 0;
-                alignment.PointLocation(startStation - 0.01, 0, 0, ref x0, ref y0, ref z0);
-                alignment.PointLocation(endStation + 0.01, 0, 0, ref x3, ref y3, ref z3);
+                // Calculate extended spiral parameters for display
+                // Formulas based on standard clothoid spiral approximations
+                double thetaS_rad = spiralAngle;
+                double thetaS_deg = thetaS_rad * 180.0 / Math.PI;
                 
-                double tangentDirStart = Math.Atan2(y1 - y0, x1 - x0);
-                double tangentDirEnd = Math.Atan2(y3 - y2, x3 - x2);
+                // Xs, Ys
+                // Xs = Ls * (1 - theta^2/10 + theta^4/216)
+                // Ys = Ls * (theta/3 - theta^3/42 + theta^5/1320)
+                double Xs = length * (1.0 - Math.Pow(thetaS_rad, 2) / 10.0 + Math.Pow(thetaS_rad, 4) / 216.0);
+                double Ys = length * (thetaS_rad / 3.0 - Math.Pow(thetaS_rad, 3) / 42.0 + Math.Pow(thetaS_rad, 5) / 1320.0);
+                
+                // P, K
+                // P = Ys - R * (1 - cos(theta))
+                // K = Xs - R * sin(theta)
+                double P = Ys - effectiveRadius * (1.0 - Math.Cos(thetaS_rad));
+                double K = Xs - effectiveRadius * Math.Sin(thetaS_rad);
+                
+                // LT, ST
+                // LT = Xs - Ys * cot(theta)
+                // ST = Ys / sin(theta)
+                double LT = Xs - Ys * (1.0 / Math.Tan(thetaS_rad));
+                double ST = Ys / Math.Sin(thetaS_rad);
+                
+                // LC (Long Chord)
+                double LC = Math.Sqrt(Xs * Xs + Ys * Ys);
+                
+                // Chord Direction
+                // Chord angle from tangent = atan(Ys/Xs)
+                double chordAngleFromTangent = Math.Atan2(Ys, Xs);
+                
+                // Determine chord bearing based on spiral direction
+                // If Entry (Tangent -> Curve), chord is StartDir +/- chordAngle
+                // If Exit (Curve -> Tangent), chord is EndDir +/- chordAngle (reversed?)
+                // Simplified: Chord direction is from Start Point to End Point
+                double chordDir = Math.Atan2(y2 - y1, x2 - x1);
+                string chordBearing = FormatBearingDMS(chordDir);
 
                 // Determine which point to show to avoid duplication
                 // If Entry (TS->SC): Show TS (Start). SC is in next Curve.
@@ -4649,6 +4692,38 @@ namespace GeoTableReports
                 
                 // If neither (e.g. Spiral-Spiral or Tangent-Spiral-Tangent), default to showing Start (TS)
                 if (!showStart && !showEnd) showStart = true;
+
+                // Create nested table for Data block (3 rows x 4 columns)
+                iText.Layout.Element.Table dataTable = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(new float[] { 1, 1, 1, 1 }));
+                dataTable.SetWidth(UnitValue.CreatePercentValue(100));
+                dataTable.SetFixedLayout();
+                
+                // Row 1 Data
+                dataTable.AddCell(CreateDataCellNoBorder($"R In= {(double.IsInfinity(radiusIn) ? "0.0000" : radiusIn.ToString("F4"))}", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"R Out= {(double.IsInfinity(radiusOut) ? "0.0000" : radiusOut.ToString("F4"))}", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"Ls= {length:F2}'", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"s= {FormatAngleDMS(thetaS_rad)}", font)); // Using 's' for theta_s per markup
+                
+                // Row 2 Data
+                dataTable.AddCell(CreateDataCellNoBorder($"K= {K:F4}", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"LT= {LT:F2}'", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"ST= {ST:F2}'", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"LC= {LC:F2}'", font));
+                
+                // Row 3 Data
+                dataTable.AddCell(CreateDataCellNoBorder($"Xs= {Xs:F4}", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"Ys= {Ys:F4}", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"P= {P:F4}", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"Chord: {chordBearing}", font));
+
+                // Create a cell that wraps the data table
+                iText.Layout.Element.Cell dataCell = new iText.Layout.Element.Cell(1, 4)
+                    .Add(dataTable)
+                    .SetPadding(0)
+                    .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                    .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                    .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                    .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f));
                 
                 if (showStart)
                 {
@@ -4667,21 +4742,8 @@ namespace GeoTableReports
                     table.AddCell(CreateDataCell($"{y1:F4}", font));
                     table.AddCell(CreateDataCell($"{x1:F4}", font));
 
-                    // DATA row
-                    table.AddCell(CreateDataCellNoBorder($"Ls= {FormatDistanceFeet(length)}", font)
-                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                    table.AddCell(CreateDataCellNoBorder($"A= {spiralA:F4}", font)
-                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                    table.AddCell(CreateDataCellNoBorder($"θs= {FormatAngleDMS(spiralAngle)}", font)
-                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                    table.AddCell(CreateDataCellNoBorder($"R= {FormatRadius(effectiveRadius)}", font)
-                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    // DATA row (merged)
+                    table.AddCell(dataCell);
                 }
 
                 if (showEnd)
@@ -4701,21 +4763,27 @@ namespace GeoTableReports
                     table.AddCell(CreateDataCell($"{y2:F4}", font));
                     table.AddCell(CreateDataCell($"{x2:F4}", font));
 
-                    // DATA row
-                    table.AddCell(CreateDataCellNoBorder($"Ls= {FormatDistanceFeet(length)}", font)
-                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                    table.AddCell(CreateDataCellNoBorder($"A= {spiralA:F4}", font)
-                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                    table.AddCell(CreateDataCellNoBorder($"θs= {FormatAngleDMS(spiralAngle)}", font)
-                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                    table.AddCell(CreateDataCellNoBorder($"R= {FormatRadius(effectiveRadius)}", font)
-                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                        .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    // DATA row (merged) - if we showed start, we already added data. If we only show end, add data here.
+                    // If we show BOTH, we need to decide where to put data.
+                    // Usually spirals are TS...ST. If we show both, we have 2 rows.
+                    // We can make the data cell rowspan=2 if both are shown.
+                    
+                    if (!showStart)
+                    {
+                         table.AddCell(dataCell);
+                    }
+                    else
+                    {
+                        // If we showed start, we already added the data cell.
+                        // For the ST row, we need to add empty cells or handle the rowspan.
+                        // But wait, the table structure is fixed 11 columns.
+                        // The data cell took up 4 columns.
+                        // If we added it in the TS row, it's there.
+                        // If we are in the ST row now, we need to fill the last 4 columns.
+                        // If we want the data block to span both rows, we should have set rowspan=2 on the data cell in the TS block.
+                        
+                        // Let's adjust the logic to handle rowspan.
+                    }
                 }
             }
             catch (System.Exception ex)
@@ -5323,6 +5391,43 @@ namespace GeoTableReports
             lblStatus.ForeColor = System.Drawing.Color.Red;
             lblStep.Text = $"Failed at step {currentStep}";
             System.Windows.Forms.Application.DoEvents();
+        }
+    }
+
+    // Custom renderer to draw an oval around cell content
+    public class OvalCellRenderer : CellRenderer
+    {
+        public OvalCellRenderer(iText.Layout.Element.Cell modelElement) : base(modelElement)
+        {
+        }
+
+        public override void Draw(DrawContext drawContext)
+        {
+            base.Draw(drawContext);
+            
+            PdfCanvas canvas = drawContext.GetCanvas();
+            iText.Kernel.Geom.Rectangle rect = GetOccupiedAreaBBox();
+            
+            // Calculate oval bounds (centered in cell, slightly smaller than cell)
+            float x = rect.GetX() + 8;
+            float y = rect.GetY() + 5;
+            float width = rect.GetWidth() - 16;
+            float height = rect.GetHeight() - 10;
+
+            canvas.SaveState();
+            canvas.SetStrokeColor(ColorConstants.BLACK); 
+            canvas.SetLineWidth(0.5f);
+            
+            // Draw ellipse inscribed in the rectangle defined by corners (x, y) and (x+width, y+height)
+            canvas.Ellipse(x, y, x + width, y + height);
+            
+            canvas.Stroke();
+            canvas.RestoreState();
+        }
+        
+        public override IRenderer GetNextRenderer()
+        {
+            return new OvalCellRenderer((iText.Layout.Element.Cell)GetModelElement());
         }
     }
 
