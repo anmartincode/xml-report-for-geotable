@@ -3593,6 +3593,7 @@ namespace GeoTableReports
                 alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
                 alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
 
+
                 // Calculate curve parameters
                 double radius = Math.Abs(arc.Radius);
                 double delta = arc.Length / radius;
@@ -4106,6 +4107,9 @@ namespace GeoTableReports
                             AlignmentEntity entity = sortedEntities[i];
                             if (entity == null) continue;
 
+                            AlignmentEntity prevEntity = i > 0 ? sortedEntities[i - 1] : null;
+                            AlignmentEntity nextEntity = i < sortedEntities.Count - 1 ? sortedEntities[i + 1] : null;
+
                             try
                             {
                                 switch (entity.EntityType)
@@ -4115,10 +4119,10 @@ namespace GeoTableReports
                                         break;
                                     case AlignmentEntityType.Arc:
                                         curveNumber++;
-                                        AddGeoTableCurvePdf(table, entity as AlignmentArc, alignment, i, curveNumber, font);
+                                        AddGeoTableCurvePdf(table, entity as AlignmentArc, alignment, i, curveNumber, font, prevEntity, nextEntity);
                                         break;
                                     case AlignmentEntityType.Spiral:
-                                        AddGeoTableSpiralPdf(table, entity, alignment, i, font);
+                                        AddGeoTableSpiralPdf(table, entity, alignment, i, font, prevEntity, nextEntity);
                                         break;
                                 }
                             }
@@ -4435,11 +4439,11 @@ namespace GeoTableReports
 
             table.AddCell(CreateDataCell("TANGENT", font));
             table.AddCell(CreateDataCell("", font));
-            table.AddCell(CreateDataCell(pointLabel, font));
-            table.AddCell(CreateDataCell(FormatStation(line.StartStation), font));
+            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell("", font));
             table.AddCell(CreateDataCell(bearing, font));
-            table.AddCell(CreateDataCell($"{y1:F4}", font));
-            table.AddCell(CreateDataCell($"{x1:F4}", font));
+            table.AddCell(CreateDataCell("", font));
+            table.AddCell(CreateDataCell("", font));
 
             // DATA - merge 4 columns with border around the group only
             table.AddCell(new iText.Layout.Element.Cell(1, 4)
@@ -4453,7 +4457,7 @@ namespace GeoTableReports
                 .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
         }
 
-        private void AddGeoTableCurvePdf(iText.Layout.Element.Table table, AlignmentArc arc, CivDb.Alignment alignment, int index, int curveNumber, PdfFont font)
+        private void AddGeoTableCurvePdf(iText.Layout.Element.Table table, AlignmentArc arc, CivDb.Alignment alignment, int index, int curveNumber, PdfFont font, AlignmentEntity prevEntity, AlignmentEntity nextEntity)
         {
             if (arc == null) return;
 
@@ -4500,18 +4504,22 @@ namespace GeoTableReports
             string curveDir = arc.Clockwise ? "R" : "L";
             string curveLabel = $"{curveNumber}-{curveDir}";
 
-            // Row 1: PC
+            // Determine labels based on neighbors
+            string startLabel = (prevEntity != null && prevEntity.EntityType == AlignmentEntityType.Spiral) ? "SC" : "PC";
+            string endLabel = (nextEntity != null && nextEntity.EntityType == AlignmentEntityType.Spiral) ? "CS" : "PT";
+
+            // Row 1: Start (PC/SC)
             table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph("CURVE").SetFont(font).SetFontSize(8))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
-                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
             table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph(curveLabel).SetFont(font).SetFontSize(8))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
-                .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
-            table.AddCell(CreateLabelCell("PC", font));
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            table.AddCell(CreateLabelCell(startLabel, font));
             table.AddCell(CreateDataCell(FormatStation(arc.StartStation), font));
-            table.AddCell(CreateDataCell(FormatBearingDMS(arc.StartDirection), font));
+            table.AddCell(CreateDataCell("", font));
             table.AddCell(CreateDataCell($"{y1:F4}", font));
             table.AddCell(CreateDataCell($"{x1:F4}", font));
 
@@ -4540,8 +4548,8 @@ namespace GeoTableReports
             table.AddCell(CreateDataCellNoBorder("Eu= --\"", font)
                 .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
 
-            // Row 3: PT (no bearing per InRails standard)
-            table.AddCell(CreateLabelCell("PT", font));
+            // Row 3: End (PT/CS) (no bearing per InRails standard)
+            table.AddCell(CreateLabelCell(endLabel, font));
             table.AddCell(CreateDataCell(FormatStation(arc.EndStation), font));
             table.AddCell(CreateDataCell("", font)); // Empty bearing column for PT
             table.AddCell(CreateDataCell($"{y2:F4}", font));
@@ -4559,19 +4567,17 @@ namespace GeoTableReports
                 .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
         }
 
-        private void AddGeoTableSpiralPdf(iText.Layout.Element.Table table, AlignmentEntity spiralEntity, CivDb.Alignment alignment, int index, PdfFont font)
+        private void AddGeoTableSpiralPdf(iText.Layout.Element.Table table, AlignmentEntity spiralEntity, CivDb.Alignment alignment, int index, PdfFont font, AlignmentEntity prevEntity, AlignmentEntity nextEntity)
         {
             if (spiralEntity == null) return;
 
             try
             {
-                bool enableSpiralDebug = true; // temporary debug flag
-                string spiralDebugPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "GeoTableReports_SpiralDebug.txt");
                 // Get coordinates and properties
                 double radiusIn = double.PositiveInfinity;
                 double radiusOut = double.PositiveInfinity;
                 double length = 0; double startStation = 0; double endStation = 0; double spiralA = 0; string spiralDirection = "";
-                double spiralPIStation = double.NaN; // declared early for sub-entity extraction
+                double spiralPIStation = double.NaN;
                 var spiral = spiralEntity as AlignmentSpiral;
                 if (spiral != null)
                 {
@@ -4588,34 +4594,7 @@ namespace GeoTableReports
                     try { dynamic d = spiralEntity; spiralDirection = (d.Direction != null ? d.Direction.ToString() : ""); } catch { }
                 }
                 
-                double totalX = 0, totalY = 0, delta = 0;
-                bool gotSubEntityData = false;
-
                 // Try to get additional properties from AlignmentSubEntitySpiral
-                try
-                {
-                    dynamic dse = spiral ?? (dynamic)spiralEntity;
-                    if (dse.SubEntityCount > 0)
-                    {
-                        var subEntity = dse[0];
-                        if (subEntity is AlignmentSubEntitySpiral)
-                        {
-                            var subEntitySpiral = subEntity as AlignmentSubEntitySpiral;
-                            totalX = subEntitySpiral.TotalX;
-                            totalY = subEntitySpiral.TotalY;
-                            delta = subEntitySpiral.Delta;
-                            gotSubEntityData = true;
-                        }
-                    }
-                }
-                catch { }
-
-                // Get point coordinates placeholders (will populate after final station/radius resolution)
-                double x1 = 0, y1 = 0, z1 = 0;
-                double x2 = 0, y2 = 0, z2 = 0;
-                double xSPI = 0, ySPI = 0, zSPI = 0;
-                
-                // Attempt to pull from sub-entity if available for authoritative values
                 try
                 {
                     dynamic dse = spiral ?? (dynamic)spiralEntity;
@@ -4624,7 +4603,6 @@ namespace GeoTableReports
                         var subEntity = dse[0];
                         if (subEntity is AlignmentSubEntitySpiral subSpiral)
                         {
-                            // Strong property access
                             startStation = subSpiral.StartStation;
                             endStation = subSpiral.EndStation;
                             length = subSpiral.Length;
@@ -4632,77 +4610,26 @@ namespace GeoTableReports
                             spiralDirection = subSpiral.Direction.ToString();
                             try { radiusIn = subSpiral.RadiusIn; } catch { }
                             try { radiusOut = subSpiral.RadiusOut; } catch { }
-                            try { spiralPIStation = subSpiral.SPIStation; } catch { }
-                            // Try SPIPoint for precise coordinates
-                            try
-                            {
-                                var spiPointProp = subSpiral.GetType().GetProperty("SPIPoint") ?? subSpiral.GetType().GetProperty("SPI");
-                                if (spiPointProp != null)
-                                {
-                                    var spiPointObj = spiPointProp.GetValue(subSpiral);
-                                    if (spiPointObj is Autodesk.AutoCAD.Geometry.Point3d p3)
-                                    {
-                                        xSPI = p3.X; ySPI = p3.Y; zSPI = p3.Z;
-                                    }
-                                    else if (spiPointObj is Autodesk.AutoCAD.Geometry.Point2d p2)
-                                    {
-                                        xSPI = p2.X; ySPI = p2.Y; zSPI = 0.0;
-                                    }
-                                }
-                            }
-                            catch { }
                         }
                     }
                 }
                 catch { }
 
-                // Determine SPI station: attempt dynamic SPIStation after sub-entity resolution; capture candidates for debug
-                double midpointCandidate = startStation + (length / 2.0);
-                double dynamicPiCandidate = midpointCandidate;
-                double subEntityPiCandidate = double.NaN;
-                double heuristicCandidate = double.NaN;
-                if (double.IsNaN(spiralPIStation)) spiralPIStation = midpointCandidate; // initialize if not set by sub-entity
-                try { dynamic d = spiral ?? (dynamic)spiralEntity; dynamicPiCandidate = d.SPIStation; spiralPIStation = dynamicPiCandidate; } catch { }
-                try {
-                    dynamic d = spiral ?? (dynamic)spiralEntity;
-                    if (d.SubEntityCount > 0) { dynamic sub = d[0]; try { subEntityPiCandidate = sub.PIStation; spiralPIStation = subEntityPiCandidate; } catch { } }
-                } catch { }
-                if (Math.Abs(spiralPIStation - midpointCandidate) < 0.01)
-                {
-                    if (!double.IsInfinity(radiusOut) && (double.IsInfinity(radiusIn) || radiusIn <= 0))
-                    {
-                        heuristicCandidate = startStation + (2.0 / 3.0) * length;
-                        spiralPIStation = heuristicCandidate;
-                    }
-                }
                 // Compute final entry/exit classification using latest radius values
                 bool isEntry = double.IsInfinity(radiusIn) || radiusIn == 0 || radiusIn > radiusOut;
-                string startLabel = isEntry ? "TS" : "CS";
-                string endLabel = isEntry ? "SC" : "ST";
                 double effectiveRadius = isEntry ? radiusOut : radiusIn;
 
-                // Populate start/end coordinates now (after potential station updates from sub-entity)
+                // Populate start/end coordinates
+                double x1 = 0, y1 = 0, z1 = 0;
+                double x2 = 0, y2 = 0, z2 = 0;
                 alignment.PointLocation(startStation, 0, 0, ref x1, ref y1, ref z1);
                 alignment.PointLocation(endStation, 0, 0, ref x2, ref y2, ref z2);
-                // Populate SPI coordinates only if we did not retrieve SPIPoint (xSPI,ySPI both zero)
-                if (Math.Abs(xSPI) < 1e-8 && Math.Abs(ySPI) < 1e-8)
-                {
-                    alignment.PointLocation(spiralPIStation, 0, 0, ref xSPI, ref ySPI, ref zSPI);
-                }
 
-                // Calculate spiral parameters (now using correct effectiveRadius)
-                double spiralK = 0, spiralP = 0, spiralAngle = 0;
-                double longTangent = 0, shortTangent = 0;
-                double chordLength = Math.Sqrt(Math.Pow(x2 - x1, 2) + Math.Pow(y2 - y1, 2));
-                
+                // Calculate spiral parameters
+                double spiralAngle = 0;
                 if (effectiveRadius > 0 && !double.IsInfinity(effectiveRadius))
                 {
-                    spiralK = (length * length) / effectiveRadius;
-                    spiralP = (length * length) / (24.0 * effectiveRadius);
                     spiralAngle = length / (2.0 * effectiveRadius);
-                    // Use series approximation consistently for both reports to ensure identical numerical results
-                    longTangent = length - (Math.Pow(length, 3) / (40 * effectiveRadius * effectiveRadius));
-                    shortTangent = (Math.Pow(length, 3) / (6 * effectiveRadius * effectiveRadius));
                 }
 
                 // Calculate directions
@@ -4711,89 +4638,84 @@ namespace GeoTableReports
                 alignment.PointLocation(endStation + 0.01, 0, 0, ref x3, ref y3, ref z3);
                 
                 double tangentDirStart = Math.Atan2(y1 - y0, x1 - x0);
-                double chordDirection = Math.Atan2(y2 - y1, x2 - x1);
                 double tangentDirEnd = Math.Atan2(y3 - y2, x3 - x2);
-                double radialDirSPI = chordDirection + (Math.PI / 2.0);
 
-                // Table rows for spiral
-                // Row 1: Start point (TS or CS)
-                table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph("SPIRAL").SetFont(font).SetFontSize(8))
-                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                    .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
-                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
-                table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph("").SetFont(font).SetFontSize(8))
-                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
-                    
-                table.AddCell(CreateDataCell(startLabel, font));
-                table.AddCell(CreateDataCell(FormatStation(startStation), font));
-                table.AddCell(CreateDataCell(FormatBearingDMS(tangentDirStart), font));
-                table.AddCell(CreateDataCell($"{y1:F4}", font));
-                table.AddCell(CreateDataCell($"{x1:F4}", font));
-
-                // DATA row 1
-                table.AddCell(CreateDataCellNoBorder($"R In= {FormatRadius(radiusIn)}", font)
-                    .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                    .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                table.AddCell(CreateDataCellNoBorder($"R Out= {FormatRadius(radiusOut)}", font)
-                    .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                table.AddCell(CreateDataCellNoBorder($"Ls= {FormatDistanceFeet(length)}", font)
-                    .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                table.AddCell(CreateDataCellNoBorder($"θs= {FormatAngleDMS(spiralAngle)} {(spiralDirection.Contains("Right") ? "R" : "L")}", font)
-                    .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                    .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-
-                // Row 2: SPI (no bearing per InRails standard)
-                table.AddCell(CreateDataCell("SPI", font));
-                table.AddCell(CreateDataCell(FormatStation(spiralPIStation), font));
-                table.AddCell(CreateDataCell("", font)); // Empty bearing column for SPI
-                table.AddCell(CreateDataCell($"{ySPI:F4}", font));
-                table.AddCell(CreateDataCell($"{xSPI:F4}", font));
-
-                // DATA row 2
-                table.AddCell(CreateDataCellNoBorder($"K= {spiralK:F4}", font)
-                    .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                table.AddCell(CreateDataCellNoBorder($"LT= {FormatDistanceFeet(longTangent)}", font));
-                table.AddCell(CreateDataCellNoBorder($"ST= {FormatDistanceFeet(shortTangent)}", font));
-                table.AddCell(CreateDataCellNoBorder($"LC= {FormatDistanceFeet(chordLength)}", font)
-                    .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-
-                // Row 3: End point (SC or ST) - ST shows bearing, SC is empty per InRails
-                table.AddCell(CreateDataCell(endLabel, font));
-                table.AddCell(CreateDataCell(FormatStation(endStation), font));
-                // Only ST (exit spiral end to tangent) shows bearing; SC (entry spiral end to curve) is empty
-                string endBearing = (endLabel == "ST") ? FormatBearingDMS(tangentDirEnd) : "";
-                table.AddCell(CreateDataCell(endBearing, font));
-                table.AddCell(CreateDataCell($"{y2:F4}", font));
-                table.AddCell(CreateDataCell($"{x2:F4}", font));
-
-                // DATA row 3
-                table.AddCell(CreateDataCellNoBorder($"Xs= {(gotSubEntityData ? totalX.ToString("F4") : "N/A")}", font)
-                    .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                    .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                table.AddCell(CreateDataCellNoBorder($"Ys= {(gotSubEntityData ? totalY.ToString("F4") : "N/A")}", font)
-                    .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                table.AddCell(CreateDataCellNoBorder($"P= {spiralP:F4}", font)
-                    .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                table.AddCell(CreateDataCellNoBorder($"Chord: {FormatBearingDMS(chordDirection)}", font)
-                    .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
-                    .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-
-                // Debug log (append)
-                if (enableSpiralDebug)
+                // Determine which point to show to avoid duplication
+                // If Entry (TS->SC): Show TS (Start). SC is in next Curve.
+                // If Exit (CS->ST): Show ST (End). CS is in prev Curve.
+                
+                bool showStart = (nextEntity != null && nextEntity.EntityType == AlignmentEntityType.Arc);
+                bool showEnd = (prevEntity != null && prevEntity.EntityType == AlignmentEntityType.Arc);
+                
+                // If neither (e.g. Spiral-Spiral or Tangent-Spiral-Tangent), default to showing Start (TS)
+                if (!showStart && !showEnd) showStart = true;
+                
+                if (showStart)
                 {
-                    try
-                    {
-                        var sb = new System.Text.StringBuilder();
-                        sb.AppendLine($"Spiral Index={index}");
-                        sb.AppendLine($"StartStation={startStation:F4} EndStation={endStation:F4} Length={length:F4}");
-                        sb.AppendLine($"RadiusIn={radiusIn:F4} RadiusOut={radiusOut:F4} EffectiveRadius={effectiveRadius:F4}");
-                        sb.AppendLine($"MidpointCandidate={midpointCandidate:F4} DynamicPiCandidate={dynamicPiCandidate:F4} SubEntityPiCandidate={(double.IsNaN(subEntityPiCandidate)?"N/A":subEntityPiCandidate.ToString("F4"))} HeuristicCandidate={(double.IsNaN(heuristicCandidate)?"N/A":heuristicCandidate.ToString("F4"))} UsedSPI={spiralPIStation:F4}");
-                        sb.AppendLine($"Coordinates: Start({x1:F4},{y1:F4}) SPI({xSPI:F4},{ySPI:F4}) End({x2:F4},{y2:F4})");
-                        sb.AppendLine(new string('-',60));
-                        System.IO.File.AppendAllText(spiralDebugPath, sb.ToString());
-                    }
-                    catch { }
+                    // Row: TS
+                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("SPIRAL").SetFont(font).SetFontSize(8))
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                        .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("").SetFont(font).SetFontSize(8))
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                        
+                    table.AddCell(CreateDataCell("TS", font));
+                    table.AddCell(CreateDataCell(FormatStation(startStation), font));
+                    table.AddCell(CreateDataCell("", font));
+                    table.AddCell(CreateDataCell($"{y1:F4}", font));
+                    table.AddCell(CreateDataCell($"{x1:F4}", font));
+
+                    // DATA row
+                    table.AddCell(CreateDataCellNoBorder($"Ls= {FormatDistanceFeet(length)}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"A= {spiralA:F4}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"θs= {FormatAngleDMS(spiralAngle)}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"R= {FormatRadius(effectiveRadius)}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                }
+
+                if (showEnd)
+                {
+                    // Row: ST
+                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("SPIRAL").SetFont(font).SetFontSize(8))
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                        .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("").SetFont(font).SetFontSize(8))
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                        
+                    table.AddCell(CreateDataCell("ST", font));
+                    table.AddCell(CreateDataCell(FormatStation(endStation), font));
+                    table.AddCell(CreateDataCell("", font));
+                    table.AddCell(CreateDataCell($"{y2:F4}", font));
+                    table.AddCell(CreateDataCell($"{x2:F4}", font));
+
+                    // DATA row
+                    table.AddCell(CreateDataCellNoBorder($"Ls= {FormatDistanceFeet(length)}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"A= {spiralA:F4}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"θs= {FormatAngleDMS(spiralAngle)}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"R= {FormatRadius(effectiveRadius)}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
                 }
             }
             catch (System.Exception ex)
@@ -4801,9 +4723,9 @@ namespace GeoTableReports
                 // Add error row
                 table.AddCell(new iText.Layout.Element.Cell(1, 2).Add(new Paragraph("SPIRAL ERROR").SetFont(font).SetFontSize(8))
                     .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
+                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
                 table.AddCell(new iText.Layout.Element.Cell(1, 5).Add(new Paragraph($"Error: {ex.Message}").SetFont(font).SetFontSize(7))
-                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 1)));
+                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
             }
         }
 
