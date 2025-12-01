@@ -336,6 +336,12 @@ namespace GeoTableReports
                                             data.VerticalSampleLines.Add($"PVI {FormatStation(c.PVIStation),15} {c.PVIElevation,12:F2}");
                                             data.VerticalSampleLines.Add($"PVT {FormatStation(c.EndStation),15} {c.EndElevation,12:F2}");
                                         }
+                                        else if (pe.EntityType == ProfileEntityType.ParabolaSymmetric && pe is ProfileParabolaSymmetric ps)
+                                        {
+                                            data.VerticalSampleLines.Add($"PVC {FormatStation(ps.StartStation),15} {ps.StartElevation,12:F2}");
+                                            data.VerticalSampleLines.Add($"PVI {FormatStation(ps.PVIStation),15} {ps.PVIElevation,12:F2}");
+                                            data.VerticalSampleLines.Add($"PVT {FormatStation(ps.EndStation),15} {ps.EndElevation,12:F2}");
+                                        }
                                     }
                                     break;
                                 }
@@ -533,26 +539,33 @@ namespace GeoTableReports
                         writer.WriteLine();
 
                         // Process profile entities
-                        if (layoutProfile.Entities != null)
+                        var sortedEntities = GetSortedProfileEntities(layoutProfile);
+                        if (sortedEntities.Count > 0)
                         {
-                            for (int i = 0; i < layoutProfile.Entities.Count; i++)
+                            for (int i = 0; i < sortedEntities.Count; i++)
                             {
                                 try
                                 {
-                                    ProfileEntity entity = layoutProfile.Entities[i];
+                                    ProfileEntity entity = sortedEntities[i];
                                     if (entity == null) continue;
 
                                     switch (entity.EntityType)
                                     {
                                         case ProfileEntityType.Tangent:
                                             if (entity is ProfileTangent tangent)
-                                                WriteProfileTangent(writer, tangent, i, layoutProfile.Entities.Count);
+                                                WriteProfileTangent(writer, tangent, i, sortedEntities.Count);
                                             else
                                                 WriteUnsupportedProfileEntity(writer, entity);
                                             break;
                                         case ProfileEntityType.Circular:
                                             if (entity is ProfileCircular circular)
                                                 WriteProfileParabola(writer, circular);
+                                            else
+                                                WriteUnsupportedProfileEntity(writer, entity);
+                                            break;
+                                        case ProfileEntityType.ParabolaSymmetric:
+                                            if (entity is ProfileParabolaSymmetric parabola)
+                                                WriteProfileParabolaSymmetric(writer, parabola);
                                             else
                                                 WriteUnsupportedProfileEntity(writer, entity);
                                             break;
@@ -715,6 +728,97 @@ namespace GeoTableReports
             }
         }
 
+        private void WriteProfileParabolaSymmetric(System.IO.StreamWriter writer, ProfileParabolaSymmetric curve)
+        {
+            try
+            {
+                if (curve == null)
+                {
+                    writer.WriteLine("Element: Parabola");
+                    writer.WriteLine("Unable to read curve data for this profile element.");
+                    writer.WriteLine();
+                    return;
+                }
+
+                const double tolerance = 1e-8;
+
+                // Get properties safely
+                double gradeIn = 0;
+                double gradeOut = 0;
+                double length = 0;
+                double startStation = 0;
+                double endStation = 0;
+                double pviStation = 0;
+                double pviElevation = 0;
+                double startElevation = 0;
+                double endElevation = 0;
+
+                try { gradeIn = curve.GradeIn; } catch { }
+                try { gradeOut = curve.GradeOut; } catch { }
+                try { length = curve.Length; } catch { }
+                try { startStation = curve.StartStation; } catch { }
+                try { endStation = curve.EndStation; } catch { }
+                try { pviStation = curve.PVIStation; } catch { }
+                try { pviElevation = curve.PVIElevation; } catch { }
+                
+                // Try to get elevations, but calculate if not available
+                try { startElevation = curve.StartElevation; } catch 
+                { 
+                    // Calculate if property doesn't exist
+                    startElevation = 0;
+                }
+                try { endElevation = curve.EndElevation; } catch 
+                { 
+                    // Calculate if property doesn't exist
+                    endElevation = 0;
+                }
+
+                gradeIn *= 100;
+                gradeOut *= 100;
+                double gradeDiff = gradeOut - gradeIn;
+                double r = Math.Abs(length) > tolerance ? gradeDiff / length : 0;
+                double k = Math.Abs(gradeDiff) > tolerance ? length / gradeDiff : double.PositiveInfinity;
+                double middleOrdinate = Math.Abs(r * length * length / 800);
+                
+                // Calculate PVC and PVT elevations from PVI
+                double gradeInDecimal = gradeIn / 100.0;
+                double gradeOutDecimal = gradeOut / 100.0;
+                double pvcElevation = pviElevation - (gradeInDecimal * (length / 2));
+                double pvtElevation = endElevation;
+                if (Math.Abs(pvtElevation) < tolerance && Math.Abs(pviElevation) > tolerance)
+                {
+                    // Calculate PVT if not available
+                    pvtElevation = pviElevation + (gradeOutDecimal * (length / 2));
+                }
+
+                writer.WriteLine("Element: Parabola");
+                writer.WriteLine($" PVC {FormatStation(startStation),15} {pvcElevation,15:F2}");
+                writer.WriteLine($" PVI {FormatStation(pviStation),15} {pviElevation,15:F2}");
+                writer.WriteLine($" PVT {FormatStation(endStation),15} {pvtElevation,15:F2}");
+                writer.WriteLine($" Length: {length,15:F2}");
+
+                double gradeChange = Math.Abs(gradeDiff);
+                if (gradeChange > 1.0)
+                    writer.WriteLine($" Stopping Sight Distance: {571.52,15:F2}");
+                else
+                    writer.WriteLine($" Headlight Sight Distance: {540.41,15:F2}");
+
+                writer.WriteLine($" Entrance Grade: {gradeIn,15:F3}");
+                writer.WriteLine($" Exit Grade: {gradeOut,15:F3}");
+                writer.WriteLine($" r = ( g2 - g1 ) / L: {r,15:F3}");
+                string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F3") : "INF";
+                writer.WriteLine($" K = l / ( g2 - g1 ): {kDisplay,15}");
+                writer.WriteLine($" Middle Ordinate: {middleOrdinate,15:F2}");
+                writer.WriteLine();
+            }
+            catch (System.Exception ex)
+            {
+                writer.WriteLine("Element: Parabola");
+                writer.WriteLine($"Error writing curve data: {ex.Message}");
+                writer.WriteLine();
+            }
+        }
+
         private void WriteUnsupportedProfileEntity(System.IO.StreamWriter writer, ProfileEntity entity)
         {
             writer.WriteLine($"Element: {entity?.EntityType.ToString() ?? "Unknown"}");
@@ -764,12 +868,24 @@ namespace GeoTableReports
         /// </summary>
         private void AddVerticalDataRow(Document document, string label, string station, double elevation, PdfFont font)
         {
-            iText.Layout.Element.Table dataTable = new iText.Layout.Element.Table(2);
+            iText.Layout.Element.Table dataTable = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(new float[] { 75, 25 }));
             dataTable.SetWidth(UnitValue.CreatePercentValue(100));
 
-            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{label}{station}").SetFont(font).SetFontSize(9))
+            // Inner table to separate Label (Left) and Station (Right)
+            iText.Layout.Element.Table innerTable = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(new float[] { 50, 50 }));
+            innerTable.SetWidth(UnitValue.CreatePercentValue(100));
+
+            innerTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(label.Trim()).SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.LEFT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+
+            innerTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(station).SetFont(font).SetFontSize(9))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER));
+
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(innerTable)
+                .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                .SetPadding(0));
 
             dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{elevation:F2}").SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
@@ -894,6 +1010,55 @@ namespace GeoTableReports
             });
 
             return allEntities;
+        }
+
+        private System.Collections.Generic.List<ProfileEntity> GetSortedProfileEntities(Profile profile)
+        {
+            var entities = new System.Collections.Generic.List<ProfileEntity>();
+            if (profile.Entities != null)
+            {
+                for (int i = 0; i < profile.Entities.Count; i++)
+                {
+                    if (profile.Entities[i] != null)
+                        entities.Add(profile.Entities[i]);
+                }
+
+                entities.Sort((a, b) =>
+                {
+                    try
+                    {
+                        // Use dynamic to access StartStation if needed, or cast if types are known
+                        // ProfileEntity usually has StartStation
+                        double sa = 0;
+                        double sb = 0;
+                        
+                        if (a is ProfileTangent t1) sa = t1.StartStation;
+                        else if (a is ProfileCircular c1) sa = c1.StartStation;
+                        else if (a is ProfileParabolaSymmetric p1) sa = p1.StartStation;
+                        else 
+                        {
+                            // Try dynamic fallback
+                            try { sa = (a as dynamic).StartStation; } catch { }
+                        }
+
+                        if (b is ProfileTangent t2) sb = t2.StartStation;
+                        else if (b is ProfileCircular c2) sb = c2.StartStation;
+                        else if (b is ProfileParabolaSymmetric p2) sb = p2.StartStation;
+                        else
+                        {
+                            // Try dynamic fallback
+                            try { sb = (b as dynamic).StartStation; } catch { }
+                        }
+
+                        return sa.CompareTo(sb);
+                    }
+                    catch
+                    {
+                        return 0;
+                    }
+                });
+            }
+            return entities;
         }
 
         private void WriteLinearElement(System.IO.StreamWriter writer, AlignmentLine line, CivDb.Alignment alignment, int index, AlignmentEntity prevEntity, AlignmentEntity nextEntity)
@@ -1326,6 +1491,31 @@ namespace GeoTableReports
             return $"{sta:D2}+{offset:00.00}";
         }
 
+        private string GetTimeZoneAbbreviation(TimeZoneInfo timeZone)
+        {
+            if (timeZone == null) return "";
+            string name = timeZone.IsDaylightSavingTime(DateTime.Now) ? timeZone.DaylightName : timeZone.StandardName;
+            
+            // Common abbreviations map
+            if (name.Contains("Pacific")) return timeZone.IsDaylightSavingTime(DateTime.Now) ? "PDT" : "PST";
+            if (name.Contains("Mountain")) return timeZone.IsDaylightSavingTime(DateTime.Now) ? "MDT" : "MST";
+            if (name.Contains("Central")) return timeZone.IsDaylightSavingTime(DateTime.Now) ? "CDT" : "CST";
+            if (name.Contains("Eastern")) return timeZone.IsDaylightSavingTime(DateTime.Now) ? "EDT" : "EST";
+            if (name.Contains("Atlantic")) return timeZone.IsDaylightSavingTime(DateTime.Now) ? "ADT" : "AST";
+            if (name.Contains("Alaska")) return timeZone.IsDaylightSavingTime(DateTime.Now) ? "AKDT" : "AKST";
+            if (name.Contains("Hawaii")) return timeZone.IsDaylightSavingTime(DateTime.Now) ? "HDT" : "HST";
+            
+            // Fallback: First letter of each word
+            var words = name.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            string abbreviation = "";
+            foreach (var word in words)
+            {
+                if (word.Length > 0 && char.IsLetter(word[0]))
+                    abbreviation += word[0];
+            }
+            return abbreviation.ToUpper();
+        }
+
         private string FormatBearing(double radians)
         {
             double degrees = radians * (180.0 / Math.PI);
@@ -1692,10 +1882,11 @@ namespace GeoTableReports
         private System.Collections.Generic.IEnumerable<XElement> GetVerticalElementsXml(Profile profile)
         {
             var elements = new System.Collections.Generic.List<XElement>();
+            var sortedEntities = GetSortedProfileEntities(profile);
 
-            for (int i = 0; i < profile.Entities.Count; i++)
+            for (int i = 0; i < sortedEntities.Count; i++)
             {
-                ProfileEntity entity = profile.Entities[i];
+                ProfileEntity entity = sortedEntities[i];
                 if (entity == null) continue;
 
                 try
@@ -1732,6 +1923,29 @@ namespace GeoTableReports
                                     new XElement("PVIStation", curve.PVIStation),
                                     new XElement("PVIElevation", curve.PVIElevation),
                                     new XElement("Length", curve.Length),
+                                    new XElement("GradeIn", gradeIn),
+                                    new XElement("GradeOut", gradeOut),
+                                    new XElement("RateOfChange", r),
+                                    new XElement("K", Math.Abs(k))
+                                ));
+                            }
+                            break;
+
+                        case ProfileEntityType.ParabolaSymmetric:
+                            var parabola = entity as ProfileParabolaSymmetric;
+                            if (parabola != null)
+                            {
+                                double gradeIn = parabola.GradeIn * 100;
+                                double gradeOut = parabola.GradeOut * 100;
+                                double r = (gradeOut - gradeIn) / parabola.Length;
+                                double k = parabola.Length / (gradeOut - gradeIn);
+
+                                elements.Add(new XElement("ParabolaSymmetric",
+                                    new XElement("StartStation", parabola.StartStation),
+                                    new XElement("EndStation", parabola.EndStation),
+                                    new XElement("PVIStation", parabola.PVIStation),
+                                    new XElement("PVIElevation", parabola.PVIElevation),
+                                    new XElement("Length", parabola.Length),
                                     new XElement("GradeIn", gradeIn),
                                     new XElement("GradeOut", gradeOut),
                                     new XElement("RateOfChange", r),
@@ -1791,7 +2005,7 @@ namespace GeoTableReports
                     .SetFont(normalFont).SetFontSize(10));
                 document.Add(new Paragraph($" Style: {alignment.StyleName ?? "Default"}")
                     .SetFont(normalFont).SetFontSize(10));
-                document.Add(new Paragraph($"Generated Report:  Date: {DateTime.Now:MM/dd/yyyy}     Time: {DateTime.Now:h:mm tt} {(TimeZoneInfo.Local.IsDaylightSavingTime(DateTime.Now) ? TimeZoneInfo.Local.DaylightName : TimeZoneInfo.Local.StandardName)}")
+                document.Add(new Paragraph($"Generated Report:  Date: {DateTime.Now:MM/dd/yyyy}     Time: {DateTime.Now:h:mm tt} {GetTimeZoneAbbreviation(TimeZoneInfo.Local)}")
                     .SetFont(normalFont).SetFontSize(9).SetItalic());
                 document.Add(new Paragraph("\n").SetFontSize(3));
 
@@ -2473,12 +2687,12 @@ namespace GeoTableReports
                     document.Add(new Paragraph($"Vertical Alignment Name: {profileName}").SetFont(normalFont).SetFontSize(10));
                     document.Add(new Paragraph($" Description: {profileDescription}").SetFont(normalFont).SetFontSize(10));
                     document.Add(new Paragraph($" Style: {profileStyle}").SetFont(normalFont).SetFontSize(10));
-                    document.Add(new Paragraph($"Generated Report:  Date: {DateTime.Now:MM/dd/yyyy}     Time: {DateTime.Now:h:mm tt} {(TimeZoneInfo.Local.IsDaylightSavingTime(DateTime.Now) ? TimeZoneInfo.Local.DaylightName : TimeZoneInfo.Local.StandardName)}")
+                    document.Add(new Paragraph($"Generated Report:  Date: {DateTime.Now:MM/dd/yyyy}  Time: {DateTime.Now:h:mm tt} {GetTimeZoneAbbreviation(TimeZoneInfo.Local)}")
                         .SetFont(normalFont).SetFontSize(9).SetItalic());
                     document.Add(new Paragraph("\n").SetFontSize(3));
 
                     // Add column headers
-                    iText.Layout.Element.Table headerTable = new iText.Layout.Element.Table(2);
+                    iText.Layout.Element.Table headerTable = new iText.Layout.Element.Table(UnitValue.CreatePercentArray(new float[] { 75, 25 }));
                     headerTable.SetWidth(UnitValue.CreatePercentValue(100));
 
                     iText.Layout.Element.Cell cell1 = new iText.Layout.Element.Cell().Add(new Paragraph("STATION").SetFont(boldFont).SetFontSize(10))
@@ -2495,26 +2709,33 @@ namespace GeoTableReports
                     document.Add(new Paragraph("\n").SetFontSize(3));
 
                     // Process profile entities
-                    if (layoutProfile.Entities != null)
+                    var sortedEntities = GetSortedProfileEntities(layoutProfile);
+                    if (sortedEntities.Count > 0)
                     {
-                        for (int i = 0; i < layoutProfile.Entities.Count; i++)
+                        for (int i = 0; i < sortedEntities.Count; i++)
                         {
                             try
                             {
-                                ProfileEntity entity = layoutProfile.Entities[i];
+                                ProfileEntity entity = sortedEntities[i];
                                 if (entity == null) continue;
 
                                 switch (entity.EntityType)
                                 {
                                     case ProfileEntityType.Tangent:
                                         if (entity is ProfileTangent tangent)
-                                            WriteProfileTangentPdf(document, tangent, i, layoutProfile.Entities.Count, normalFont, boldFont);
+                                            WriteProfileTangentPdf(document, tangent, i, sortedEntities.Count, normalFont, boldFont);
                                         else
                                             WriteUnsupportedProfileEntityPdf(document, entity, normalFont);
                                         break;
                                     case ProfileEntityType.Circular:
                                         if (entity is ProfileCircular circular)
                                             WriteProfileParabolaPdf(document, circular, normalFont, boldFont);
+                                        else
+                                            WriteUnsupportedProfileEntityPdf(document, entity, normalFont);
+                                        break;
+                                    case ProfileEntityType.ParabolaSymmetric:
+                                        if (entity is ProfileParabolaSymmetric parabola)
+                                            WriteProfileParabolaSymmetricPdf(document, parabola, normalFont, boldFont);
                                         else
                                             WriteUnsupportedProfileEntityPdf(document, entity, normalFont);
                                         break;
@@ -2588,6 +2809,97 @@ namespace GeoTableReports
         }
 
         private void WriteProfileParabolaPdf(Document document, ProfileCircular curve, PdfFont normalFont, PdfFont labelFont)
+        {
+            try
+            {
+                if (curve == null)
+                {
+                    document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10));
+                    document.Add(new Paragraph("Unable to read curve data for this profile element.").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph("\n"));
+                    return;
+                }
+
+                const double tolerance = 1e-8;
+
+                // Get properties safely
+                double gradeIn = 0;
+                double gradeOut = 0;
+                double length = 0;
+                double startStation = 0;
+                double endStation = 0;
+                double pviStation = 0;
+                double pviElevation = 0;
+                double startElevation = 0;
+                double endElevation = 0;
+
+                try { gradeIn = curve.GradeIn; } catch { }
+                try { gradeOut = curve.GradeOut; } catch { }
+                try { length = curve.Length; } catch { }
+                try { startStation = curve.StartStation; } catch { }
+                try { endStation = curve.EndStation; } catch { }
+                try { pviStation = curve.PVIStation; } catch { }
+                try { pviElevation = curve.PVIElevation; } catch { }
+
+                // Try to get elevations, but calculate if not available
+                try { startElevation = curve.StartElevation; } catch
+                {
+                    startElevation = 0;
+                }
+                try { endElevation = curve.EndElevation; } catch
+                {
+                    endElevation = 0;
+                }
+
+                gradeIn *= 100;
+                gradeOut *= 100;
+                double gradeDiff = gradeOut - gradeIn;
+                double r = Math.Abs(length) > tolerance ? gradeDiff / length : 0;
+                double k = Math.Abs(gradeDiff) > tolerance ? length / gradeDiff : double.PositiveInfinity;
+                double middleOrdinate = Math.Abs(r * length * length / 800);
+
+                // Calculate PVC and PVT elevations from PVI
+                double gradeInDecimal = gradeIn / 100.0;
+                double gradeOutDecimal = gradeOut / 100.0;
+                double pvcElevation = pviElevation - (gradeInDecimal * (length / 2));
+                double pvtElevation = endElevation;
+                if (Math.Abs(pvtElevation) < tolerance && Math.Abs(pviElevation) > tolerance)
+                {
+                    pvtElevation = pviElevation + (gradeOutDecimal * (length / 2));
+                }
+
+                document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10));
+                document.Add(new Paragraph("\n").SetFontSize(2));
+
+                AddVerticalDataRow(document, "PVC ", FormatStation(startStation), pvcElevation, normalFont);
+                AddVerticalDataRow(document, "PVI ", FormatStation(pviStation), pviElevation, normalFont);
+                AddVerticalDataRow(document, "PVT ", FormatStation(endStation), pvtElevation, normalFont);
+
+                document.Add(new Paragraph($"Length: {length:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+
+                double gradeChange = Math.Abs(gradeDiff);
+                if (gradeChange > 1.0)
+                    document.Add(new Paragraph($"Stopping Sight Distance: {571.52:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                else
+                    document.Add(new Paragraph($"Headlight Sight Distance: {540.41:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+
+                document.Add(new Paragraph($"Entrance Grade: {gradeIn:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Exit Grade: {gradeOut:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"r = ( g2 - g1 ) / L: {r:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F3") : "INF";
+                document.Add(new Paragraph($"K = l / ( g2 - g1 ): {kDisplay}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Middle Ordinate: {middleOrdinate:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph("\n").SetFontSize(2));
+            }
+            catch (System.Exception ex)
+            {
+                document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10));
+                document.Add(new Paragraph($"Error writing curve data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+        }
+
+        private void WriteProfileParabolaSymmetricPdf(Document document, ProfileParabolaSymmetric curve, PdfFont normalFont, PdfFont labelFont)
         {
             try
             {
@@ -3148,9 +3460,10 @@ namespace GeoTableReports
                     currentRow++;
 
                     // Process profile entities
-                    for (int i = 0; i < layoutProfile.Entities.Count; i++)
+                    var sortedEntities = GetSortedProfileEntities(layoutProfile);
+                    for (int i = 0; i < sortedEntities.Count; i++)
                     {
-                        ProfileEntity entity = layoutProfile.Entities[i];
+                        ProfileEntity entity = sortedEntities[i];
                         if (entity == null) continue;
 
                         try
@@ -3159,11 +3472,15 @@ namespace GeoTableReports
                             {
                                 case ProfileEntityType.Tangent:
                                     if (entity is ProfileTangent tangent)
-                                        currentRow = WriteProfileTangentExcel(worksheet, tangent, i, layoutProfile.Entities.Count, currentRow);
+                                        currentRow = WriteProfileTangentExcel(worksheet, tangent, i, sortedEntities.Count, currentRow);
                                     break;
                                 case ProfileEntityType.Circular:
                                     if (entity is ProfileCircular circular)
                                         currentRow = WriteProfileParabolaExcel(worksheet, circular, currentRow);
+                                    break;
+                                case ProfileEntityType.ParabolaSymmetric:
+                                    if (entity is ProfileParabolaSymmetric parabola)
+                                        currentRow = WriteProfileParabolaSymmetricExcel(worksheet, parabola, currentRow);
                                     break;
                             }
                         }
@@ -3234,6 +3551,60 @@ namespace GeoTableReports
         }
 
         private int WriteProfileParabolaExcel(ExcelWorksheet ws, ProfileCircular curve, int row)
+        {
+            if (curve == null) return row + 1;
+
+            try
+            {
+                const double tolerance = 1e-8;
+
+                double gradeIn = curve.GradeIn * 100;
+                double gradeOut = curve.GradeOut * 100;
+                double length = curve.Length;
+                double pviElevation = curve.PVIElevation;
+
+                double gradeInDecimal = gradeIn / 100.0;
+                double gradeOutDecimal = gradeOut / 100.0;
+                double pvcElevation = pviElevation - (gradeInDecimal * (length / 2));
+                double pvtElevation = pviElevation + (gradeOutDecimal * (length / 2));
+
+                // PVC
+                ws.Cells[row, 1].Value = "CURVE";
+                ws.Cells[row, 2].Value = "PVC";
+                ws.Cells[row, 3].Value = FormatStation(curve.StartStation);
+                ws.Cells[row, 4].Value = pvcElevation;
+                ws.Cells[row, 4].Style.Numberformat.Format = "0.00";
+                ws.Cells[row, 5].Value = $"{gradeIn:F3}%";
+                ws.Cells[row, 6].Value = $"L = {length:F2}";
+                row++;
+
+                // PVI
+                ws.Cells[row, 2].Value = "PVI";
+                ws.Cells[row, 3].Value = FormatStation(curve.PVIStation);
+                ws.Cells[row, 4].Value = pviElevation;
+                ws.Cells[row, 4].Style.Numberformat.Format = "0.00";
+                double gradeDiff = gradeOut - gradeIn;
+                double k = Math.Abs(gradeDiff) > tolerance ? length / gradeDiff : double.PositiveInfinity;
+                string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F2") : "INF";
+                ws.Cells[row, 6].Value = $"K = {kDisplay}";
+                row++;
+
+                // PVT
+                ws.Cells[row, 2].Value = "PVT";
+                ws.Cells[row, 3].Value = FormatStation(curve.EndStation);
+                ws.Cells[row, 4].Value = pvtElevation;
+                ws.Cells[row, 4].Style.Numberformat.Format = "0.00";
+                ws.Cells[row, 5].Value = $"{gradeOut:F3}%";
+
+                return row + 1;
+            }
+            catch
+            {
+                return row + 1;
+            }
+        }
+
+        private int WriteProfileParabolaSymmetricExcel(ExcelWorksheet ws, ProfileParabolaSymmetric curve, int row)
         {
             if (curve == null) return row + 1;
 
@@ -4012,7 +4383,7 @@ namespace GeoTableReports
                         document.Add(title);
                         
                         // Add date/time
-                        Paragraph dateTime = new Paragraph($"Generated Report:  Date: {DateTime.Now:MM/dd/yyyy}     Time: {DateTime.Now:h:mm tt} {(TimeZoneInfo.Local.IsDaylightSavingTime(DateTime.Now) ? TimeZoneInfo.Local.DaylightName : TimeZoneInfo.Local.StandardName)}")
+                        Paragraph dateTime = new Paragraph($"Generated Report:  Date: {DateTime.Now:MM/dd/yyyy}     Time: {DateTime.Now:h:mm tt} {GetTimeZoneAbbreviation(TimeZoneInfo.Local)}")
                             .SetFont(font)
                             .SetFontSize(8)
                             .SetItalic()
@@ -4230,9 +4601,10 @@ namespace GeoTableReports
                         table.AddHeaderCell(CreateHeaderCell("", boldFont, 1, 1));
 
                         int curveNumber = 0;
-                        for (int i = 0; i < profile.Entities.Count; i++)
+                        var sortedEntities = GetSortedProfileEntities(profile);
+                        for (int i = 0; i < sortedEntities.Count; i++)
                         {
-                            var entity = profile.Entities[i];
+                            var entity = sortedEntities[i];
                             if (entity == null) continue;
                             try
                             {
@@ -4244,6 +4616,10 @@ namespace GeoTableReports
                                     case ProfileEntityType.Circular:
                                         curveNumber++;
                                         AddVerticalCurveRows(table, entity as ProfileCircular, curveNumber, font);
+                                        break;
+                                    case ProfileEntityType.ParabolaSymmetric:
+                                        curveNumber++;
+                                        AddVerticalCurveRows(table, entity as ProfileParabolaSymmetric, curveNumber, font);
                                         break;
                                 }
                             }
@@ -4292,6 +4668,83 @@ namespace GeoTableReports
         }
 
         private void AddVerticalCurveRows(iText.Layout.Element.Table table, ProfileCircular curve, int curveNumber, PdfFont font)
+        {
+            if (curve == null) return;
+            const double tol = 1e-8;
+            double pvcSta = curve.StartStation;
+            double pvtSta = curve.EndStation;
+            double pviSta = curve.PVIStation;
+            double pviElev = curve.PVIElevation;
+            double gradeInPct = curve.GradeIn * 100.0;
+            double gradeOutPct = curve.GradeOut * 100.0;
+            double length = curve.Length;
+            double gradeDiff = gradeOutPct - gradeInPct;
+            double k = Math.Abs(gradeDiff) > tol ? length / Math.Abs(gradeDiff) : double.PositiveInfinity;
+
+            // Compute PVC & PVT elevations if not exposed
+            double pvcElev = 0; double pvtElev = 0;
+            try { pvcElev = curve.StartElevation; } catch { pvcElev = pviElev - (curve.GradeIn * (length/2)); }
+            try { pvtElev = curve.EndElevation; } catch { pvtElev = pviElev + (curve.GradeOut * (length/2)); }
+
+            // High/Low point determination
+            // x from PVC where derivative = 0: x = -g1*L/(g2-g1) (grades in decimal)
+            double g1 = curve.GradeIn; double g2 = curve.GradeOut; double xHighLow = double.NaN; double highLowSta = double.NaN; double highLowElev = double.NaN; string curveType = "";
+            if (Math.Abs(g2 - g1) > tol)
+            {
+                xHighLow = -g1 * length / (g2 - g1); // feet along curve from PVC
+                if (xHighLow >= 0 && xHighLow <= length)
+                {
+                    highLowSta = pvcSta + xHighLow;
+                    // Elevation at x: y = yPVC + g1*x + ( (g2-g1)/(2L) ) * x^2
+                    highLowElev = pvcElev + g1 * xHighLow + ((g2 - g1) / (2.0 * length)) * xHighLow * xHighLow;
+                }
+            }
+            curveType = (g1 > g2) ? "Crest" : (g1 < g2 ? "Sag" : "Level");
+
+            string curveLabel = $"VC{curveNumber}-{(curveType.StartsWith("C")?"C":"S")}"; // VC#-C/S simplified label
+            string kDisplay = double.IsInfinity(k) ? "INF" : k.ToString("F2");
+
+            // Row 1: PVC
+            table.AddCell(new iText.Layout.Element.Cell(3,1).Add(new Paragraph("CURVE").SetFont(font).SetFontSize(8))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK,1)));
+            table.AddCell(new iText.Layout.Element.Cell(3,1).Add(new Paragraph(curveLabel).SetFont(font).SetFontSize(8))
+                .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.TOP)
+                .SetBorder(new SolidBorder(ColorConstants.BLACK,1)));
+            table.AddCell(CreateDataCell("PVC", font));
+            table.AddCell(CreateDataCell(FormatStation(pvcSta), font));
+            table.AddCell(CreateDataCell(pvcElev.ToString("F2"), font));
+            table.AddCell(CreateDataCell(FormatGrade(gradeInPct), font));
+            table.AddCell(CreateDataCellNoBorder($"G1= {FormatGrade(gradeInPct)}", font).SetBorderTop(new SolidBorder(ColorConstants.BLACK,0.5f)).SetBorderLeft(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"G2= {FormatGrade(gradeOutPct)}", font).SetBorderTop(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"L= {length:F2}", font).SetBorderTop(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"K= {kDisplay}", font).SetBorderTop(new SolidBorder(ColorConstants.BLACK,0.5f)).SetBorderRight(new SolidBorder(ColorConstants.BLACK,0.5f)));
+
+            // Row 2: PVI
+            table.AddCell(CreateDataCell("PVI", font));
+            table.AddCell(CreateDataCell(FormatStation(pviSta), font));
+            table.AddCell(CreateDataCell(pviElev.ToString("F2"), font));
+            table.AddCell(CreateDataCell("", font)); // grade column blank for PVI row
+            table.AddCell(CreateDataCellNoBorder($"Type= {curveType}", font).SetBorderLeft(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder($"ΔG= {gradeDiff:F3}%", font));
+            table.AddCell(CreateDataCellNoBorder(!double.IsNaN(highLowSta)? $"HpSta= {FormatStation(highLowSta)}" : "HpSta= -", font));
+            table.AddCell(CreateDataCellNoBorder(!double.IsNaN(highLowElev)? $"HpElev= {highLowElev:F2}" : "HpElev= -", font).SetBorderRight(new SolidBorder(ColorConstants.BLACK,0.5f)));
+
+            // Row 3: PVT
+            table.AddCell(CreateDataCell("PVT", font));
+            table.AddCell(CreateDataCell(FormatStation(pvtSta), font));
+            table.AddCell(CreateDataCell(pvtElev.ToString("F2"), font));
+            table.AddCell(CreateDataCell(FormatGrade(gradeOutPct), font));
+            // Sight distance placeholder (user can supply actual values later)
+            table.AddCell(CreateDataCellNoBorder("SSD= --", font).SetBorderBottom(new SolidBorder(ColorConstants.BLACK,0.5f)).SetBorderLeft(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder("Middle Ord= --", font).SetBorderBottom(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder("Notes= -", font).SetBorderBottom(new SolidBorder(ColorConstants.BLACK,0.5f)));
+            table.AddCell(CreateDataCellNoBorder("", font).SetBorderBottom(new SolidBorder(ColorConstants.BLACK,0.5f)).SetBorderRight(new SolidBorder(ColorConstants.BLACK,0.5f)));
+        }
+
+        private void AddVerticalCurveRows(iText.Layout.Element.Table table, ProfileParabolaSymmetric curve, int curveNumber, PdfFont font)
         {
             if (curve == null) return;
             const double tol = 1e-8;
@@ -4879,7 +5332,17 @@ namespace GeoTableReports
                     sfd.FileName = System.IO.Path.GetFileName(OutputPath);
                     if (sfd.ShowDialog() == DialogResult.OK)
                     {
-                        OutputPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(sfd.FileName) ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop), System.IO.Path.GetFileNameWithoutExtension(sfd.FileName));
+                        string selectedPath = sfd.FileName;
+                        string directory = System.IO.Path.GetDirectoryName(selectedPath) ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                        string fileName = System.IO.Path.GetFileNameWithoutExtension(selectedPath);
+
+                        // Strip known suffixes to avoid duplication
+                        if (fileName.EndsWith("_Alignment_Report"))
+                            fileName = fileName.Substring(0, fileName.Length - "_Alignment_Report".Length);
+                        else if (fileName.EndsWith("_GeoTable"))
+                            fileName = fileName.Substring(0, fileName.Length - "_GeoTable".Length);
+
+                        OutputPath = System.IO.Path.Combine(directory, fileName);
                         outputPathTextBox.Text = OutputPath;
                     }
                 }
