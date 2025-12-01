@@ -109,7 +109,7 @@ namespace GeoTableReports
 
                         // Alignment Reports (Detailed)
                         bool generateAlignmentPDF = dialog.GenerateAlignmentPDF;
-                        bool generateAlignmentTXT = dialog.GenerateAlignmentTXT;
+
                         bool generateAlignmentXML = dialog.GenerateAlignmentXML;
 
                         // GeoTable Reports (GLTT Standard)
@@ -169,20 +169,6 @@ namespace GeoTableReports
                                     ed.WriteMessage($"\n✓ Alignment PDF saved successfully");
                                 }
 
-                                if (generateAlignmentTXT)
-                                {
-                                    string txtPath = baseOutputPath + "_Alignment_Report.txt";
-                                    ed.WriteMessage($"\nGenerating Alignment TXT: {txtPath}");
-
-                                    if (reportType == "Vertical")
-                                        GenerateVerticalReport(alignment, txtPath);
-                                    else
-                                        GenerateHorizontalReport(alignment, txtPath);
-
-                                    generatedFiles.Add(txtPath);
-                                    ed.WriteMessage($"\n✓ Alignment TXT saved successfully");
-                                }
-
                                 if (generateAlignmentXML)
                                 {
                                     string xmlPath = baseOutputPath + "_Alignment_Report.xml";
@@ -203,12 +189,7 @@ namespace GeoTableReports
                                     string pdfPath = baseOutputPath + "_GeoTable.pdf";
                                     ed.WriteMessage($"\nGenerating GeoTable PDF: {pdfPath}");
 
-                                    if (reportType == "Vertical")
-                                    {
-                                        // Vertical profile doesn't have GeoTable format yet, use detailed
-                                        GenerateVerticalReportPdf(alignment, pdfPath);
-                                    }
-                                    else
+                                    if (reportType != "Vertical")
                                         GenerateHorizontalGeoTablePdf(alignment, pdfPath);
 
                                     generatedFiles.Add(pdfPath);
@@ -220,12 +201,7 @@ namespace GeoTableReports
                                     string excelPath = baseOutputPath + "_GeoTable.xlsx";
                                     ed.WriteMessage($"\nGenerating GeoTable EXCEL: {excelPath}");
 
-                                    if (reportType == "Vertical")
-                                    {
-                                        // Vertical profile doesn't have GeoTable format yet, use detailed
-                                        GenerateVerticalReportExcel(alignment, excelPath);
-                                    }
-                                    else
+                                    if (reportType != "Vertical")
                                         GenerateHorizontalGeoTableExcel(alignment, excelPath);
 
                                     generatedFiles.Add(excelPath);
@@ -378,312 +354,6 @@ namespace GeoTableReports
         /// <summary>
         /// Generate vertical alignment report
         /// </summary>
-        private void GenerateVerticalReport(CivDb.Alignment alignment, string outputPath)
-        {
-            try
-            {
-                if (alignment == null)
-                {
-                    throw new System.ArgumentNullException(nameof(alignment), "Alignment object is null");
-                }
-
-                // Get project name from drawing properties
-                Database db = null;
-                string projectName = "Unknown Project";
-                try
-                {
-                    db = alignment.Database;
-                    if (db != null && !string.IsNullOrEmpty(db.Filename))
-                    {
-                        projectName = System.IO.Path.GetFileNameWithoutExtension(db.Filename);
-                    }
-                }
-                catch
-                {
-                    projectName = "Unknown Project";
-                }
-
-                // Get alignment properties safely
-                string alignmentName = "";
-                string alignmentDescription = "";
-                string alignmentStyle = "Default";
-                try
-                {
-                    alignmentName = alignment?.Name ?? "";
-                }
-                catch { }
-                try
-                {
-                    alignmentDescription = alignment?.Description ?? "";
-                }
-                catch { }
-                try
-                {
-                    alignmentStyle = alignment?.StyleName ?? "Default";
-                }
-                catch { }
-
-                // Get first layout profile ID
-                ObjectId layoutProfileId = ObjectId.Null;
-                try
-                {
-                    foreach (ObjectId profileId in alignment.GetProfileIds())
-                    {
-                        using (Profile profile = profileId.GetObject(OpenMode.ForRead) as Profile)
-                        {
-                            if (profile != null && profile.Entities != null && profile.Entities.Count > 0)
-                            {
-                                layoutProfileId = profileId;
-                                break;
-                            }
-                        }
-                    }
-                }
-                catch (System.Exception ex)
-                {
-                    AcApp.Application.DocumentManager.MdiActiveDocument.Editor.WriteMessage($"\nError getting profile IDs: {ex.Message}");
-                    return;
-                }
-
-                if (layoutProfileId == ObjectId.Null)
-                {
-                    AcApp.Application.DocumentManager.MdiActiveDocument.Editor.WriteMessage("\nNo layout profile found.");
-                    return;
-                }
-
-                // Open the profile and generate report
-                using (Profile layoutProfile = layoutProfileId.GetObject(OpenMode.ForRead) as Profile)
-                {
-                    if (layoutProfile == null)
-                    {
-                        AcApp.Application.DocumentManager.MdiActiveDocument.Editor.WriteMessage("\nError accessing profile.");
-                        return;
-                    }
-
-                    // Get profile properties safely
-                    string profileName = "";
-                    string profileDescription = "";
-                    string profileStyle = "Default";
-                    try
-                    {
-                        profileName = layoutProfile.Name ?? "";
-                    }
-                    catch { }
-                    try
-                    {
-                        profileDescription = layoutProfile.Description ?? "";
-                    }
-                    catch { }
-                    try
-                    {
-                        profileStyle = layoutProfile.StyleName ?? "Default";
-                    }
-                    catch { }
-
-                    using (System.IO.StreamWriter writer = new System.IO.StreamWriter(outputPath))
-                    {
-                        // Write header
-                        writer.WriteLine($"Project Name: {projectName}");
-                        writer.WriteLine($" Description:");
-                        writer.WriteLine($"Horizontal Alignment Name: {alignmentName}");
-                        writer.WriteLine($" Description: {alignmentDescription}");
-                        writer.WriteLine($" Style: {alignmentStyle}");
-                        writer.WriteLine($"Vertical Profile Name: {profileName}");
-                        writer.WriteLine($" Description: {profileDescription}");
-                        writer.WriteLine($" Style: {profileStyle}");
-                        writer.WriteLine($" {"STATION",15} {"ELEVATION",15}");
-                        writer.WriteLine();
-
-                        // Process profile entities
-                        if (layoutProfile.Entities != null)
-                        {
-                            for (int i = 0; i < layoutProfile.Entities.Count; i++)
-                            {
-                                try
-                                {
-                                    ProfileEntity entity = layoutProfile.Entities[i];
-                                    if (entity == null) continue;
-
-                                    switch (entity.EntityType)
-                                    {
-                                        case ProfileEntityType.Tangent:
-                                            if (entity is ProfileTangent tangent)
-                                                WriteProfileTangent(writer, tangent, i, layoutProfile.Entities.Count);
-                                            else
-                                                WriteUnsupportedProfileEntity(writer, entity);
-                                            break;
-                                        case ProfileEntityType.Circular:
-                                            if (entity is ProfileCircular circular)
-                                                WriteProfileParabola(writer, circular);
-                                            else
-                                                WriteUnsupportedProfileEntity(writer, entity);
-                                            break;
-                                        default:
-                                            WriteUnsupportedProfileEntity(writer, entity);
-                                            break;
-                                    }
-                                }
-                                catch (System.Exception ex)
-                                {
-                                    writer.WriteLine($"Error processing entity {i}: {ex.Message}");
-                                    writer.WriteLine();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch (System.Exception ex)
-            {
-                throw new System.Exception($"Error in GenerateVerticalReport: {ex.Message}", ex);
-            }
-        }
-
-        private void WriteProfileTangent(System.IO.StreamWriter writer, ProfileTangent tangent, int index, int totalCount)
-        {
-            try
-            {
-                if (tangent == null)
-                {
-                    writer.WriteLine("Element: Linear");
-                    writer.WriteLine("Unable to read tangent data for this profile element.");
-                    writer.WriteLine();
-                    return;
-                }
-
-                writer.WriteLine("Element: Linear");
-                writer.WriteLine();
-
-                // Get properties safely
-                double startStation = 0;
-                double startElevation = 0;
-                double endStation = 0;
-                double endElevation = 0;
-                double grade = 0;
-                double length = 0;
-
-                try { startStation = tangent.StartStation; } catch { }
-                try { startElevation = tangent.StartElevation; } catch { }
-                try { endStation = tangent.EndStation; } catch { }
-                try { endElevation = tangent.EndElevation; } catch { }
-                try { grade = tangent.Grade; } catch { }
-                try { length = tangent.Length; } catch { }
-
-                // Determine point labels
-                if (index == 0)
-                    writer.WriteLine($" POB {FormatStation(startStation),15} {startElevation,15:F2}");
-
-                writer.WriteLine($" PVI {FormatStation(endStation),15} {endElevation,15:F2}");
-                writer.WriteLine($" Tangent Grade: {grade * 100,15:F3}");
-                writer.WriteLine($" Tangent Length: {length,15:F2}");
-                writer.WriteLine();
-            }
-            catch (System.Exception ex)
-            {
-                writer.WriteLine("Element: Linear");
-                writer.WriteLine($"Error writing tangent data: {ex.Message}");
-                writer.WriteLine();
-            }
-        }
-
-        private void WriteProfileParabola(System.IO.StreamWriter writer, ProfileCircular curve)
-        {
-            try
-            {
-                if (curve == null)
-                {
-                    writer.WriteLine("Element: Parabola");
-                    writer.WriteLine("Unable to read curve data for this profile element.");
-                    writer.WriteLine();
-                    return;
-                }
-
-                const double tolerance = 1e-8;
-
-                // Get properties safely
-                double gradeIn = 0;
-                double gradeOut = 0;
-                double length = 0;
-                double startStation = 0;
-                double endStation = 0;
-                double pviStation = 0;
-                double pviElevation = 0;
-                double startElevation = 0;
-                double endElevation = 0;
-
-                try { gradeIn = curve.GradeIn; } catch { }
-                try { gradeOut = curve.GradeOut; } catch { }
-                try { length = curve.Length; } catch { }
-                try { startStation = curve.StartStation; } catch { }
-                try { endStation = curve.EndStation; } catch { }
-                try { pviStation = curve.PVIStation; } catch { }
-                try { pviElevation = curve.PVIElevation; } catch { }
-                
-                // Try to get elevations, but calculate if not available
-                try { startElevation = curve.StartElevation; } catch 
-                { 
-                    // Calculate if property doesn't exist
-                    startElevation = 0;
-                }
-                try { endElevation = curve.EndElevation; } catch 
-                { 
-                    // Calculate if property doesn't exist
-                    endElevation = 0;
-                }
-
-                gradeIn *= 100;
-                gradeOut *= 100;
-                double gradeDiff = gradeOut - gradeIn;
-                double r = Math.Abs(length) > tolerance ? gradeDiff / length : 0;
-                double k = Math.Abs(gradeDiff) > tolerance ? length / gradeDiff : double.PositiveInfinity;
-                double middleOrdinate = Math.Abs(r * length * length / 800);
-                
-                // Calculate PVC and PVT elevations from PVI
-                double gradeInDecimal = gradeIn / 100.0;
-                double gradeOutDecimal = gradeOut / 100.0;
-                double pvcElevation = pviElevation - (gradeInDecimal * (length / 2));
-                double pvtElevation = endElevation;
-                if (Math.Abs(pvtElevation) < tolerance && Math.Abs(pviElevation) > tolerance)
-                {
-                    // Calculate PVT if not available
-                    pvtElevation = pviElevation + (gradeOutDecimal * (length / 2));
-                }
-
-                writer.WriteLine("Element: Parabola");
-                writer.WriteLine($" PVC {FormatStation(startStation),15} {pvcElevation,15:F2}");
-                writer.WriteLine($" PVI {FormatStation(pviStation),15} {pviElevation,15:F2}");
-                writer.WriteLine($" PVT {FormatStation(endStation),15} {pvtElevation,15:F2}");
-                writer.WriteLine($" Length: {length,15:F2}");
-
-                double gradeChange = Math.Abs(gradeDiff);
-                if (gradeChange > 1.0)
-                    writer.WriteLine($" Stopping Sight Distance: {571.52,15:F2}");
-                else
-                    writer.WriteLine($" Headlight Sight Distance: {540.41,15:F2}");
-
-                writer.WriteLine($" Entrance Grade: {gradeIn,15:F3}");
-                writer.WriteLine($" Exit Grade: {gradeOut,15:F3}");
-                writer.WriteLine($" r = ( g2 - g1 ) / L: {r,15:F3}");
-                string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F3") : "INF";
-                writer.WriteLine($" K = l / ( g2 - g1 ): {kDisplay,15}");
-                writer.WriteLine($" Middle Ordinate: {middleOrdinate,15:F2}");
-                writer.WriteLine();
-            }
-            catch (System.Exception ex)
-            {
-                writer.WriteLine("Element: Parabola");
-                writer.WriteLine($"Error writing curve data: {ex.Message}");
-                writer.WriteLine();
-            }
-        }
-
-        private void WriteUnsupportedProfileEntity(System.IO.StreamWriter writer, ProfileEntity entity)
-        {
-            writer.WriteLine($"Element: {entity?.EntityType.ToString() ?? "Unknown"}");
-            writer.WriteLine("Unsupported profile entity type encountered.");
-            writer.WriteLine();
-        }
-
         /// <summary>
         /// Helper method to add a data row to horizontal alignment table (3 columns)
         /// </summary>
@@ -742,79 +412,6 @@ namespace GeoTableReports
         /// <summary>
         /// Generate horizontal alignment report
         /// </summary>
-        private void GenerateHorizontalReport(CivDb.Alignment alignment, string outputPath)
-        {
-            try
-            {
-                // Get project name from drawing properties
-                Database db = alignment.Database;
-                string projectName = "";
-                try
-                {
-                    if (db.Filename != null && db.Filename.Length > 0)
-                    {
-                        projectName = System.IO.Path.GetFileNameWithoutExtension(db.Filename);
-                    }
-                }
-                catch
-                {
-                    projectName = "Unknown Project";
-                }
-
-                using (System.IO.StreamWriter writer = new System.IO.StreamWriter(outputPath))
-                {
-                    // Write header
-                    writer.WriteLine($"Project Name: {projectName}");
-                    writer.WriteLine($" Description:");
-                    writer.WriteLine($"Horizontal Alignment Name: {alignment.Name}");
-                    writer.WriteLine($" Description: {alignment.Description ?? ""}");
-                    writer.WriteLine($" Style: {alignment.StyleName ?? "Default"}");
-                    writer.WriteLine($" {"STATION",15} {"NORTHING",15} {"EASTING",15}");
-                    writer.WriteLine();
-
-                    // Reorder entities to match InRails format (Linear, then Spiral/Arc associated with it)
-                    var reorderedEntities = ReorderEntitiesForInRails(alignment);
-
-                    // Process each entity
-                    for (int i = 0; i < reorderedEntities.Count; i++)
-                    {
-                        AlignmentEntity entity = reorderedEntities[i];
-                        if (entity == null) continue;
-
-                        try
-                        {
-                            switch (entity.EntityType)
-                            {
-                                case AlignmentEntityType.Line:
-                                    WriteLinearElement(writer, entity as AlignmentLine, alignment, i);
-                                    break;
-                                case AlignmentEntityType.Arc:
-                                    WriteArcElement(writer, entity as AlignmentArc, alignment, i);
-                                    break;
-                                case AlignmentEntityType.Spiral:
-                                    WriteSpiralElement(writer, entity as AlignmentSpiral, alignment, i);
-                                    break;
-                                default:
-                                    writer.WriteLine($"Element: {entity.EntityType}");
-                                    writer.WriteLine("Unsupported element type.");
-                                    writer.WriteLine();
-                                    break;
-                            }
-                        }
-                        catch (System.Exception ex)
-                        {
-                            writer.WriteLine($"Error processing entity {i}: {ex.Message}");
-                            writer.WriteLine();
-                        }
-                    }
-                }
-            }
-            catch (System.Exception ex)
-            {
-                throw new System.Exception($"Error in GenerateHorizontalReport: {ex.Message}", ex);
-            }
-        }
-
         private System.Collections.Generic.List<AlignmentEntity> ReorderEntitiesForInRails(CivDb.Alignment alignment)
         {
             var reordered = new System.Collections.Generic.List<AlignmentEntity>();
@@ -874,201 +471,6 @@ namespace GeoTableReports
             }
 
             return reordered;
-        }
-
-        private void WriteLinearElement(System.IO.StreamWriter writer, AlignmentLine line, CivDb.Alignment alignment, int index)
-        {
-            if (line == null)
-            {
-                writer.WriteLine("Element: Linear");
-                writer.WriteLine("Unable to read line data for this alignment element.");
-                writer.WriteLine();
-                return;
-            }
-
-            try
-            {
-                double x1 = 0, y1 = 0, z1 = 0;
-                double x2 = 0, y2 = 0, z2 = 0;
-                alignment.PointLocation(line.StartStation, 0, 0, ref x1, ref y1, ref z1);
-                alignment.PointLocation(line.EndStation, 0, 0, ref x2, ref y2, ref z2);
-
-                string bearing = FormatBearing(line.Direction);
-
-                writer.WriteLine("Element: Linear");
-
-                // InRails format uses ST (Start of Tangent) for linear element start points
-                writer.WriteLine($" ST  ( ) {FormatStation(line.StartStation),15} {y1,15:F4} {x1,15:F4}");
-
-                // Determine end point label based on what element type comes after this tangent
-                // We need to look ahead in the ORIGINAL alignment entities to see what follows this line
-                string endLabel = "PI  ";  // Default if nothing follows
-
-                // Find this line in the original alignment entities
-                for (int i = 0; i < alignment.Entities.Count; i++)
-                {
-                    if (alignment.Entities[i] == line)
-                    {
-                        // Check what comes next in the original alignment
-                        if (i < alignment.Entities.Count - 1)
-                        {
-                            var nextEntity = alignment.Entities[i + 1];
-                            if (nextEntity.EntityType == AlignmentEntityType.Spiral)
-                                endLabel = "TS  ";  // Tangent to Spiral
-                            else if (nextEntity.EntityType == AlignmentEntityType.Arc)
-                                endLabel = "PC  ";  // Point of Curvature (Tangent to Arc)
-                        }
-                        break;
-                    }
-                }
-
-                writer.WriteLine($" {endLabel}( ) {FormatStation(line.EndStation),15} {y2,15:F4} {x2,15:F4}");
-                writer.WriteLine($" Tangent Direction: {bearing}");
-                writer.WriteLine($" Tangent Length: {line.Length,15:F4}");
-                writer.WriteLine();
-            }
-            catch (System.Exception ex)
-            {
-                writer.WriteLine("Element: Linear");
-                writer.WriteLine($"Error writing line data: {ex.Message}");
-                writer.WriteLine();
-            }
-        }
-
-        private void WriteArcElement(System.IO.StreamWriter writer, AlignmentArc arc, CivDb.Alignment alignment, int index)
-        {
-            if (arc == null)
-            {
-                writer.WriteLine("Element: Circular");
-                writer.WriteLine("Unable to read arc data for this alignment element.");
-                writer.WriteLine();
-                return;
-            }
-
-            try
-            {
-                double x1 = 0, y1 = 0, z1 = 0;
-                double x2 = 0, y2 = 0, z2 = 0;
-                double xc = 0, yc = 0, zc = 0;
-                double xMid = 0, yMid = 0, zMid = 0;
-
-                alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
-                alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
-                alignment.PointLocation((arc.StartStation + arc.EndStation) / 2, 0, 0, ref xMid, ref yMid, ref zMid);
-
-                // Calculate center point
-                double midStation = (arc.StartStation + arc.EndStation) / 2;
-                double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
-                alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
-
-                double deltaRadians = arc.Delta;
-                double deltaDegrees = deltaRadians * (180.0 / Math.PI);
-                double chord = 2 * arc.Radius * Math.Sin(Math.Abs(deltaRadians) / 2);
-                double middleOrdinate = arc.Radius * (1 - Math.Cos(Math.Abs(deltaRadians) / 2));
-                double external = arc.Radius * (1 / Math.Cos(Math.Abs(deltaRadians) / 2) - 1);
-                double tangent = arc.Radius * Math.Tan(Math.Abs(deltaRadians) / 2);
-
-                writer.WriteLine("Element: Circular");
-                writer.WriteLine($" SC  ( ) {FormatStation(arc.StartStation),15} {y1,15:F4} {x1,15:F4}");
-                writer.WriteLine($" PI  ( ) {FormatStation(midStation),15} {yMid,15:F4} {xMid,15:F4}");
-                writer.WriteLine($" CC  ( ) {yc,32:F4} {xc,15:F4}");
-                writer.WriteLine($" CS  ( ) {FormatStation(arc.EndStation),15} {y2,15:F4} {x2,15:F4}");
-                writer.WriteLine($" Radius: {arc.Radius,15:F4}");
-                writer.WriteLine($" Design Speed(mph): {50.0,15:F4}");
-                writer.WriteLine($" Cant(inches): {2.0,15:F3}");
-                writer.WriteLine($" Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}");
-                writer.WriteLine($"Degree of Curvature(Chord): {FormatAngle(5729.58 / arc.Radius)}");
-                writer.WriteLine($" Length: {arc.Length,15:F4}");
-                writer.WriteLine($" Length(Chorded): {arc.Length,15:F4}");
-                writer.WriteLine($" Tangent: {tangent,15:F4}");
-                writer.WriteLine($" Chord: {chord,15:F4}");
-                writer.WriteLine($" Middle Ordinate: {middleOrdinate,15:F4}");
-                writer.WriteLine($" External: {external,15:F4}");
-                writer.WriteLine();
-            }
-            catch (System.Exception ex)
-            {
-                writer.WriteLine("Element: Circular");
-                writer.WriteLine($"Error writing arc data: {ex.Message}");
-                writer.WriteLine();
-            }
-        }
-
-        private void WriteSpiralElement(System.IO.StreamWriter writer, AlignmentSpiral spiral, CivDb.Alignment alignment, int index)
-        {
-            if (spiral == null)
-            {
-                writer.WriteLine("Element: Clothoid");
-                writer.WriteLine("Unable to read spiral data for this alignment element.");
-                writer.WriteLine();
-                return;
-            }
-
-            try
-            {
-                double x1 = 0, y1 = 0, z1 = 0;
-                double x2 = 0, y2 = 0, z2 = 0;
-                double xMid = 0, yMid = 0, zMid = 0;
-
-                alignment.PointLocation(spiral.StartStation, 0, 0, ref x1, ref y1, ref z1);
-                alignment.PointLocation(spiral.EndStation, 0, 0, ref x2, ref y2, ref z2);
-
-                // Calculate spiral point at arc length l (midpoint for now)
-                double spiralMidStation = (spiral.StartStation + spiral.EndStation) / 2;
-                alignment.PointLocation(spiralMidStation, 0, 0, ref xMid, ref yMid, ref zMid);
-
-                bool isEntry = spiral.RadiusIn > spiral.RadiusOut || (spiral.RadiusIn == 0 && spiral.RadiusOut > 0);
-                double R1 = isEntry ? double.PositiveInfinity : (spiral.RadiusIn > 0 ? spiral.RadiusIn : 0);  // Radius of curve 1
-                double R2 = isEntry ? (spiral.RadiusOut > 0 ? spiral.RadiusOut : 0) : double.PositiveInfinity;  // Radius of curve 2
-                double L = spiral.Length;  // Total arc length of spiral
-
-                // Calculate clothoid parameter A (flatness of spiral): A = sqrt(L*R)
-                double R = isEntry ? R2 : R1;
-                double A = 0;
-                if (R > 0 && !double.IsInfinity(R))
-                {
-                    A = Math.Sqrt(L * R);
-                }
-
-                // Calculate central angle theta at spiral point
-                double theta = 0;
-                if (R > 0 && !double.IsInfinity(R))
-                {
-                    theta = L / (2 * R);  // Total angle subtended by spiral (radians)
-                }
-
-                writer.WriteLine("Element: Clothoid");
-
-                if (isEntry)
-                {
-                    writer.WriteLine($" TS  ( ) {FormatStation(spiral.StartStation),15} {y1,15:F4} {x1,15:F4}");
-                    writer.WriteLine($" SPI ( ) {FormatStation(spiralMidStation),15} {yMid,15:F4} {xMid,15:F4}");
-                    writer.WriteLine($" SC  ( ) {FormatStation(spiral.EndStation),15} {y2,15:F4} {x2,15:F4}");
-                }
-                else
-                {
-                    writer.WriteLine($" CS  ( ) {FormatStation(spiral.StartStation),15} {y1,15:F4} {x1,15:F4}");
-                    writer.WriteLine($" SPI ( ) {FormatStation(spiralMidStation),15} {yMid,15:F4} {xMid,15:F4}");
-                    writer.WriteLine($" ST  ( ) {FormatStation(spiral.EndStation),15} {y2,15:F4} {x2,15:F4}");
-                }
-
-                // Output spiral parameters
-                writer.WriteLine($" R1 (Radius of curve 1): {(double.IsInfinity(R1) ? "Infinite" : $"{R1:F4}"),15}");
-                writer.WriteLine($" R2 (Radius of curve 2): {(double.IsInfinity(R2) ? "Infinite" : $"{R2:F4}"),15}");
-                writer.WriteLine($" SS (Spiral start): {FormatStation(spiral.StartStation),15}");
-                writer.WriteLine($" SE (Spiral end): {FormatStation(spiral.EndStation),15}");
-                writer.WriteLine($" SP (Spiral point at arc length l): {FormatStation(spiralMidStation),15}");
-                writer.WriteLine($" Θ (Central angle at spiral point): {FormatAngle(theta * 180.0 / Math.PI)}");
-                writer.WriteLine($" L (Total arc length): {L,15:F4}");
-                writer.WriteLine($" A (Flatness parameter): {A,15:F4}");
-                writer.WriteLine();
-            }
-            catch (System.Exception ex)
-            {
-                writer.WriteLine("Element: Clothoid");
-                writer.WriteLine($"Error writing spiral data: {ex.Message}");
-                writer.WriteLine();
-            }
         }
 
         private string FormatStation(double station)
@@ -1417,6 +819,29 @@ namespace GeoTableReports
                                     new XElement("PVIStation", curve.PVIStation),
                                     new XElement("PVIElevation", curve.PVIElevation),
                                     new XElement("Length", curve.Length),
+                                    new XElement("GradeIn", gradeIn),
+                                    new XElement("GradeOut", gradeOut),
+                                    new XElement("RateOfChange", r),
+                                    new XElement("K", Math.Abs(k))
+                                ));
+                            }
+                            break;
+
+                        case ProfileEntityType.ParabolaSymmetric:
+                            var parabola = entity as ProfileParabolaSymmetric;
+                            if (parabola != null)
+                            {
+                                double gradeIn = parabola.GradeIn * 100;
+                                double gradeOut = parabola.GradeOut * 100;
+                                double r = (gradeOut - gradeIn) / parabola.Length;
+                                double k = parabola.Length / (gradeOut - gradeIn);
+
+                                elements.Add(new XElement("ParabolaSymmetric",
+                                    new XElement("StartStation", parabola.StartStation),
+                                    new XElement("EndStation", parabola.EndStation),
+                                    new XElement("PVIStation", parabola.PVIStation),
+                                    new XElement("PVIElevation", parabola.PVIElevation),
+                                    new XElement("Length", parabola.Length),
                                     new XElement("GradeIn", gradeIn),
                                     new XElement("GradeOut", gradeOut),
                                     new XElement("RateOfChange", r),
@@ -1909,6 +1334,12 @@ namespace GeoTableReports
                                         else
                                             WriteUnsupportedProfileEntityPdf(document, entity, normalFont);
                                         break;
+                                    case ProfileEntityType.ParabolaSymmetric:
+                                        if (entity is ProfileParabolaSymmetric parabola)
+                                            WriteProfileParabolaSymmetricPdf(document, parabola, normalFont, boldFont);
+                                        else
+                                            WriteUnsupportedProfileEntityPdf(document, entity, normalFont);
+                                        break;
                                     default:
                                         WriteUnsupportedProfileEntityPdf(document, entity, normalFont);
                                         break;
@@ -2064,6 +1495,97 @@ namespace GeoTableReports
             catch (System.Exception ex)
             {
                 document.Add(new Paragraph("Element: Parabola").SetFont(labelFont).SetFontSize(10));
+                document.Add(new Paragraph($"Error writing curve data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+        }
+
+        private void WriteProfileParabolaSymmetricPdf(Document document, ProfileParabolaSymmetric curve, PdfFont normalFont, PdfFont labelFont)
+        {
+            try
+            {
+                if (curve == null)
+                {
+                    document.Add(new Paragraph("Element: ParabolaSymmetric").SetFont(labelFont).SetFontSize(10));
+                    document.Add(new Paragraph("Unable to read curve data for this profile element.").SetFont(normalFont).SetFontSize(10));
+                    document.Add(new Paragraph("\n"));
+                    return;
+                }
+
+                const double tolerance = 1e-8;
+
+                // Get properties safely
+                double gradeIn = 0;
+                double gradeOut = 0;
+                double length = 0;
+                double startStation = 0;
+                double endStation = 0;
+                double pviStation = 0;
+                double pviElevation = 0;
+                double startElevation = 0;
+                double endElevation = 0;
+
+                try { gradeIn = curve.GradeIn; } catch { }
+                try { gradeOut = curve.GradeOut; } catch { }
+                try { length = curve.Length; } catch { }
+                try { startStation = curve.StartStation; } catch { }
+                try { endStation = curve.EndStation; } catch { }
+                try { pviStation = curve.PVIStation; } catch { }
+                try { pviElevation = curve.PVIElevation; } catch { }
+
+                // Try to get elevations, but calculate if not available
+                try { startElevation = curve.StartElevation; } catch
+                {
+                    startElevation = 0;
+                }
+                try { endElevation = curve.EndElevation; } catch
+                {
+                    endElevation = 0;
+                }
+
+                gradeIn *= 100;
+                gradeOut *= 100;
+                double gradeDiff = gradeOut - gradeIn;
+                double r = Math.Abs(length) > tolerance ? gradeDiff / length : 0;
+                double k = Math.Abs(gradeDiff) > tolerance ? length / gradeDiff : double.PositiveInfinity;
+                double middleOrdinate = Math.Abs(r * length * length / 800);
+
+                // Calculate PVC and PVT elevations from PVI
+                double gradeInDecimal = gradeIn / 100.0;
+                double gradeOutDecimal = gradeOut / 100.0;
+                double pvcElevation = pviElevation - (gradeInDecimal * (length / 2));
+                double pvtElevation = endElevation;
+                if (Math.Abs(pvtElevation) < tolerance && Math.Abs(pviElevation) > tolerance)
+                {
+                    pvtElevation = pviElevation + (gradeOutDecimal * (length / 2));
+                }
+
+                document.Add(new Paragraph("Element: ParabolaSymmetric").SetFont(labelFont).SetFontSize(10));
+                document.Add(new Paragraph("\n").SetFontSize(5));
+
+                AddVerticalDataRow(document, "PVC ", FormatStation(startStation), pvcElevation, normalFont);
+                AddVerticalDataRow(document, "PVI ", FormatStation(pviStation), pviElevation, normalFont);
+                AddVerticalDataRow(document, "PVT ", FormatStation(endStation), pvtElevation, normalFont);
+
+                document.Add(new Paragraph($"Length: {length:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+
+                double gradeChange = Math.Abs(gradeDiff);
+                if (gradeChange > 1.0)
+                    document.Add(new Paragraph($"Stopping Sight Distance: {571.52:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                else
+                    document.Add(new Paragraph($"Headlight Sight Distance: {540.41:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+
+                document.Add(new Paragraph($"Entrance Grade: {gradeIn:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Exit Grade: {gradeOut:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"r = ( g2 - g1 ) / L: {r:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F3") : "INF";
+                document.Add(new Paragraph($"K = l / ( g2 - g1 ): {kDisplay}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Middle Ordinate: {middleOrdinate:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph("\n").SetFontSize(5));
+            }
+            catch (System.Exception ex)
+            {
+                document.Add(new Paragraph("Element: ParabolaSymmetric").SetFont(labelFont).SetFontSize(10));
                 document.Add(new Paragraph($"Error writing curve data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
                 document.Add(new Paragraph("\n"));
             }
@@ -2456,219 +1978,7 @@ namespace GeoTableReports
         /// <summary>
         /// Generate vertical alignment report in Excel GeoTable format
         /// </summary>
-        private void GenerateVerticalReportExcel(CivDb.Alignment alignment, string outputPath)
-        {
-            // Set EPPlus license context
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
-            try
-            {
-                // Get project name
-                Database db = alignment.Database;
-                string projectName = "Unknown Project";
-                try
-                {
-                    if (db != null && !string.IsNullOrEmpty(db.Filename))
-                    {
-                        projectName = System.IO.Path.GetFileNameWithoutExtension(db.Filename);
-                    }
-                }
-                catch { }
-
-                // Get first layout profile
-                ObjectId layoutProfileId = ObjectId.Null;
-                foreach (ObjectId profileId in alignment.GetProfileIds())
-                {
-                    using (Profile profile = profileId.GetObject(OpenMode.ForRead) as Profile)
-                    {
-                        if (profile != null && profile.Entities != null && profile.Entities.Count > 0)
-                        {
-                            layoutProfileId = profileId;
-                            break;
-                        }
-                    }
-                }
-
-                if (layoutProfileId == ObjectId.Null)
-                {
-                    throw new System.Exception("No layout profile found.");
-                }
-
-                using (Profile layoutProfile = layoutProfileId.GetObject(OpenMode.ForRead) as Profile)
-                using (var package = new ExcelPackage())
-                {
-                    var worksheet = package.Workbook.Worksheets.Add("Vertical Profile Data");
-
-                    // Set up header
-                    int currentRow = 1;
-
-                    // Title
-                    worksheet.Cells[currentRow, 1].Value = $"VERTICAL PROFILE DATA - {alignment.Name?.ToUpper() ?? "ALIGNMENT"}";
-                    worksheet.Cells[currentRow, 1, currentRow, 6].Merge = true;
-                    worksheet.Cells[currentRow, 1].Style.Font.Bold = true;
-                    worksheet.Cells[currentRow, 1].Style.Font.Size = 12;
-                    worksheet.Cells[currentRow, 1].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-                    currentRow += 2;
-
-                    // Column headers
-                    worksheet.Cells[currentRow, 1].Value = "ELEMENT";
-                    worksheet.Cells[currentRow, 2].Value = "POINT";
-                    worksheet.Cells[currentRow, 3].Value = "STATION";
-                    worksheet.Cells[currentRow, 4].Value = "ELEVATION";
-                    worksheet.Cells[currentRow, 5].Value = "GRADE";
-                    worksheet.Cells[currentRow, 6].Value = "DATA";
-
-                    // Style headers
-                    using (var range = worksheet.Cells[currentRow, 1, currentRow, 6])
-                    {
-                        range.Style.Font.Bold = true;
-                        range.Style.Fill.PatternType = ExcelFillStyle.Solid;
-                        range.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
-                        range.Style.Border.BorderAround(ExcelBorderStyle.Thin);
-                        range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-                    }
-
-                    currentRow++;
-
-                    // Process profile entities
-                    for (int i = 0; i < layoutProfile.Entities.Count; i++)
-                    {
-                        ProfileEntity entity = layoutProfile.Entities[i];
-                        if (entity == null) continue;
-
-                        try
-                        {
-                            switch (entity.EntityType)
-                            {
-                                case ProfileEntityType.Tangent:
-                                    if (entity is ProfileTangent tangent)
-                                        currentRow = WriteProfileTangentExcel(worksheet, tangent, i, layoutProfile.Entities.Count, currentRow);
-                                    break;
-                                case ProfileEntityType.Circular:
-                                    if (entity is ProfileCircular circular)
-                                        currentRow = WriteProfileParabolaExcel(worksheet, circular, currentRow);
-                                    break;
-                            }
-                        }
-                        catch (System.Exception ex)
-                        {
-                            worksheet.Cells[currentRow, 1].Value = "ERROR";
-                            worksheet.Cells[currentRow, 2].Value = $"Error: {ex.Message}";
-                            currentRow++;
-                        }
-                    }
-
-                    // Auto-fit columns
-                    worksheet.Cells.AutoFitColumns();
-                    worksheet.Column(1).Width = 12;
-                    worksheet.Column(2).Width = 10;
-                    worksheet.Column(3).Width = 15;
-                    worksheet.Column(4).Width = 12;
-                    worksheet.Column(5).Width = 12;
-                    worksheet.Column(6).Width = 30;
-
-                    // Save the file
-                    System.IO.FileInfo file = new System.IO.FileInfo(outputPath);
-                    package.SaveAs(file);
-                }
-            }
-            catch (System.Exception ex)
-            {
-                throw new System.Exception($"Error generating vertical Excel report: {ex.Message}", ex);
-            }
-        }
-
-        private int WriteProfileTangentExcel(ExcelWorksheet ws, ProfileTangent tangent, int index, int totalCount, int row)
-        {
-            if (tangent == null) return row + 1;
-
-            try
-            {
-                double grade = tangent.Grade * 100;
-
-                // Start point
-                if (index == 0)
-                {
-                    ws.Cells[row, 1].Value = "TANGENT";
-                    ws.Cells[row, 2].Value = "POB";
-                    ws.Cells[row, 3].Value = FormatStation(tangent.StartStation);
-                    ws.Cells[row, 4].Value = tangent.StartElevation;
-                    ws.Cells[row, 4].Style.Numberformat.Format = "0.00";
-                    ws.Cells[row, 5].Value = $"{grade:F3}%";
-                    ws.Cells[row, 6].Value = $"L = {tangent.Length:F2}";
-                    row++;
-                }
-
-                // End point (PVI)
-                ws.Cells[row, 1].Value = "TANGENT";
-                ws.Cells[row, 2].Value = "PVI";
-                ws.Cells[row, 3].Value = FormatStation(tangent.EndStation);
-                ws.Cells[row, 4].Value = tangent.EndElevation;
-                ws.Cells[row, 4].Style.Numberformat.Format = "0.00";
-                ws.Cells[row, 5].Value = $"{grade:F3}%";
-                ws.Cells[row, 6].Value = $"L = {tangent.Length:F2}";
-
-                return row + 1;
-            }
-            catch
-            {
-                return row + 1;
-            }
-        }
-
-        private int WriteProfileParabolaExcel(ExcelWorksheet ws, ProfileCircular curve, int row)
-        {
-            if (curve == null) return row + 1;
-
-            try
-            {
-                const double tolerance = 1e-8;
-
-                double gradeIn = curve.GradeIn * 100;
-                double gradeOut = curve.GradeOut * 100;
-                double length = curve.Length;
-                double pviElevation = curve.PVIElevation;
-
-                double gradeInDecimal = gradeIn / 100.0;
-                double gradeOutDecimal = gradeOut / 100.0;
-                double pvcElevation = pviElevation - (gradeInDecimal * (length / 2));
-                double pvtElevation = pviElevation + (gradeOutDecimal * (length / 2));
-
-                // PVC
-                ws.Cells[row, 1].Value = "CURVE";
-                ws.Cells[row, 2].Value = "PVC";
-                ws.Cells[row, 3].Value = FormatStation(curve.StartStation);
-                ws.Cells[row, 4].Value = pvcElevation;
-                ws.Cells[row, 4].Style.Numberformat.Format = "0.00";
-                ws.Cells[row, 5].Value = $"{gradeIn:F3}%";
-                ws.Cells[row, 6].Value = $"L = {length:F2}";
-                row++;
-
-                // PVI
-                ws.Cells[row, 2].Value = "PVI";
-                ws.Cells[row, 3].Value = FormatStation(curve.PVIStation);
-                ws.Cells[row, 4].Value = pviElevation;
-                ws.Cells[row, 4].Style.Numberformat.Format = "0.00";
-                double gradeDiff = gradeOut - gradeIn;
-                double k = Math.Abs(gradeDiff) > tolerance ? length / gradeDiff : double.PositiveInfinity;
-                string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F2") : "INF";
-                ws.Cells[row, 6].Value = $"K = {kDisplay}";
-                row++;
-
-                // PVT
-                ws.Cells[row, 2].Value = "PVT";
-                ws.Cells[row, 3].Value = FormatStation(curve.EndStation);
-                ws.Cells[row, 4].Value = pvtElevation;
-                ws.Cells[row, 4].Style.Numberformat.Format = "0.00";
-                ws.Cells[row, 5].Value = $"{gradeOut:F3}%";
-
-                return row + 1;
-            }
-            catch
-            {
-                return row + 1;
-            }
-        }
 
         /// <summary>
         /// Generate horizontal alignment GeoTable report in Excel (GLTT Standard Format)
@@ -3618,7 +2928,7 @@ namespace GeoTableReports
 
         // Alignment Reports (Detailed)
         public bool GenerateAlignmentPDF { get; private set; }
-        public bool GenerateAlignmentTXT { get; private set; }
+
         public bool GenerateAlignmentXML { get; private set; }
 
         // GeoTable Reports (GLTT Standard)
@@ -3632,7 +2942,7 @@ namespace GeoTableReports
 
         // Alignment Report checkboxes
         private CheckBox chkAlignmentPDF;
-        private CheckBox chkAlignmentTXT;
+
         private CheckBox chkAlignmentXML;
 
         // GeoTable Report checkboxes
@@ -3703,13 +3013,7 @@ namespace GeoTableReports
                 Checked = true,
                 AutoSize = true
             };
-            chkAlignmentTXT = new CheckBox
-            {
-                Text = "TXT - Plain text format",
-                Location = new System.Drawing.Point(20, 50),
-                Checked = false,
-                AutoSize = true
-            };
+
             chkAlignmentXML = new CheckBox
             {
                 Text = "XML - Structured data format",
@@ -3718,7 +3022,7 @@ namespace GeoTableReports
                 AutoSize = true
             };
             grpAlignmentReports.Controls.Add(chkAlignmentPDF);
-            grpAlignmentReports.Controls.Add(chkAlignmentTXT);
+
             grpAlignmentReports.Controls.Add(chkAlignmentXML);
 
             btnSelectAllAlignment = new Button
@@ -3826,7 +3130,7 @@ namespace GeoTableReports
             // Add tooltips
             var toolTip = new ToolTip();
             toolTip.SetToolTip(chkAlignmentPDF, "Detailed multi-page alignment report with complete geometry calculations");
-            toolTip.SetToolTip(chkAlignmentTXT, "Plain text version of detailed alignment report");
+
             toolTip.SetToolTip(chkAlignmentXML, "Machine-readable XML format with structured alignment data");
             toolTip.SetToolTip(chkGeoTablePDF, "Compact table format matching GLTT standard specifications");
             toolTip.SetToolTip(chkGeoTableEXCEL, "GLTT standard Excel format with proper column structure and merged cells");
@@ -3836,7 +3140,7 @@ namespace GeoTableReports
         private void BtnSelectAllAlignment_Click(object sender, EventArgs e)
         {
             chkAlignmentPDF.Checked = true;
-            chkAlignmentTXT.Checked = true;
+
             chkAlignmentXML.Checked = true;
         }
 
@@ -3869,7 +3173,7 @@ namespace GeoTableReports
         private void BtnOK_Click(object sender, EventArgs e)
         {
             // Validate at least one format is selected
-            bool hasAlignmentReport = chkAlignmentPDF.Checked || chkAlignmentTXT.Checked || chkAlignmentXML.Checked;
+            bool hasAlignmentReport = chkAlignmentPDF.Checked || chkAlignmentXML.Checked;
             bool hasGeoTableReport = chkGeoTablePDF.Checked || chkGeoTableEXCEL.Checked;
 
             if (!hasAlignmentReport && !hasGeoTableReport)
@@ -3902,7 +3206,7 @@ namespace GeoTableReports
 
             // Alignment Reports
             GenerateAlignmentPDF = chkAlignmentPDF.Checked;
-            GenerateAlignmentTXT = chkAlignmentTXT.Checked;
+
             GenerateAlignmentXML = chkAlignmentXML.Checked;
 
             // GeoTable Reports
