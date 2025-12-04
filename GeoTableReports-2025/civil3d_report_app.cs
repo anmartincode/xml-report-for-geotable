@@ -1,10 +1,7 @@
 #pragma warning disable 1591
 #pragma warning disable CA1416
 /*
- * Civil 3D GeoTable Reports - .NET Add-in Starter Template
- *
- * This is a basic template showing how a .NET add-in would work
- * Compile this with Visual Studio and Civil 3D API references
+ * Civil 3D GeoTable Reports - .NET Add-in
  */
 
 using System;
@@ -59,12 +56,6 @@ namespace GeoTableReports
             public static string VerticalCurveIntersection => "PVI";
             public static string VerticalCurveEnd => "PVT";
         }
-    // InRoads variable label mapping applied (2025 feature-single-version-compatibility branch):
-    // Horizontal: POB (start of alignment), PI (point of intersection of tangents),
-    // PC (point of curvature – start of circular curve), PT (point of tangency – end of circular curve),
-    // TS (tangent to spiral), SC (spiral to curve), CS (curve to spiral), ST (spiral to tangent) when spirals present.
-    // Vertical: POB (start), PVC (point of vertical curvature), PVI (point of vertical intersection), PVT (point of vertical tangency).
-    // Previous placeholders (POT, ST, CS for non-spiral curve ends) replaced to align with InRoads conventions.
 
         public void Initialize()
         {
@@ -93,7 +84,7 @@ namespace GeoTableReports
 
             try
             {
-                // Select alignment BEFORE showing dialog so preview has real data
+                // Select alignment before showing dialog so preview has real data
                 ObjectId alignmentId = SelectAlignment(ed);
                 if (alignmentId == ObjectId.Null)
                 {
