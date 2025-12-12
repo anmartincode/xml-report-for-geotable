@@ -513,7 +513,7 @@ namespace GeoTableReports
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
                 .SetPadding(0));
 
-            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph($"{elevation:F2}").SetFont(font).SetFontSize(9))
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatRounded(elevation, 2)).SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
                 .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f)));
@@ -662,7 +662,9 @@ namespace GeoTableReports
         {
             int sta = (int)(station / 100);
             double offset = station - (sta * 100);
-            return $"{sta:D2}+{offset:00.00}";
+            // Use AwayFromZero rounding for surveying precision
+            double roundedOffset = Math.Round(offset, 2, MidpointRounding.AwayFromZero);
+            return $"{sta:D2}+{roundedOffset:00.00}";
         }
 
         private string GetTimeZoneAbbreviation(TimeZoneInfo timeZone)
@@ -1881,11 +1883,18 @@ namespace GeoTableReports
 
                 // Determine point labels
                 if (index == 0)
+                {
                     AddVerticalDataRow(document, "POB ", FormatStation(startStation), startElevation, normalFont);
+                }
+                else
+                {
+                    // After a parabola: show PVT at start (carrying over from parabola's end)
+                    AddVerticalDataRow(document, "PVT ", FormatStation(startStation), startElevation, normalFont);
+                }
 
-                AddVerticalDataRow(document, "PVI ", FormatStation(endStation), endElevation, normalFont);
+                AddVerticalDataRow(document, "PVC ", FormatStation(endStation), endElevation, normalFont);
                 document.Add(new Paragraph($"Tangent Grade: {grade * 100:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"Tangent Length: {length:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"Tangent Length: {FormatRounded(length, 2)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph("\n").SetFontSize(2));
             }
             catch (System.Exception ex)
@@ -1973,9 +1982,9 @@ namespace GeoTableReports
 
                 document.Add(new Paragraph($"Entrance Grade: {gradeIn:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Exit Grade: {gradeOut:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"r = ( g2 - g1 ) / L: {r:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F3") : "INF";
-                document.Add(new Paragraph($"K = l / ( g2 - g1 ): {kDisplay}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"r = ( g2 - g1 ) / L: {r * 100:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F2") : "INF";
+                document.Add(new Paragraph($"K = L / ( g2 - g1 ): {kDisplay}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Middle Ordinate: {middleOrdinate:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph("\n").SetFontSize(2));
             }
@@ -2064,9 +2073,9 @@ namespace GeoTableReports
 
                 document.Add(new Paragraph($"Entrance Grade: {gradeIn:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Exit Grade: {gradeOut:F3}%").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                document.Add(new Paragraph($"r = ( g2 - g1 ) / L: {r:F3}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
-                string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F3") : "INF";
-                document.Add(new Paragraph($"K = l / ( g2 - g1 ): {kDisplay}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                document.Add(new Paragraph($"r = ( g2 - g1 ) / L: {r * 100:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                string kDisplay = Math.Abs(gradeDiff) > tolerance ? Math.Abs(k).ToString("F2") : "INF";
+                document.Add(new Paragraph($"K = L / ( g2 - g1 ): {kDisplay}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph($"Middle Ordinate: {middleOrdinate:F2}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
                 document.Add(new Paragraph("\n").SetFontSize(2));
             }
@@ -2465,23 +2474,7 @@ namespace GeoTableReports
                     ws.Cells[row, 1].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                     row++;
                     
-                    // Date and Time row
-                    ws.Cells[row, 0].Value = "Generated Report:";
-                    ws.Cells[row, 0].Style.Font.Bold = true;
-                    ws.Cells[row, 0].Style.Font.Size = 9;
-
-                    ws.Cells[row, 2].Value = "Date:";
-                    ws.Cells[row, 2].Style.Font.Bold = true;
-                    ws.Cells[row, 2].Style.Font.Size = 9;
-                    ws.Cells[row, 3].Value = DateTime.Now.ToString("MM/dd/yyyy");
-                    ws.Cells[row, 3].Style.Font.Size = 9;
-                    
-                    ws.Cells[row, 4].Value = "Time:";
-                    ws.Cells[row, 4].Style.Font.Bold = true;
-                    ws.Cells[row, 4].Style.Font.Size = 9;
-                    ws.Cells[row, 5].Value = DateTime.Now.ToString("h:mm tt");
-                    ws.Cells[row, 5].Style.Font.Size = 9;
-                    row++;
+                    // Date/time omitted for GeoTables per markup (kept for alignment reports)
 
                     // Headers row 1
                     int headerRow1 = row;
@@ -2843,9 +2836,9 @@ namespace GeoTableReports
                 ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 2: PI - show PI Station (no bearing per InRails standard)
+                // Row 2: PI (no station/bearing per markup)
                 ws.Cells[row, 3].Value = "PI";
-                ws.Cells[row, 4].Value = FormatStation(piStation);
+                ws.Cells[row, 4].Value = ""; // Station deleted per markup
                 ws.Cells[row, 5].Value = ""; // Empty bearing column for PI
                 ws.Cells[row, 6].Value = yPI;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
@@ -3152,17 +3145,10 @@ namespace GeoTableReports
                             .SetFont(boldFont)
                             .SetFontSize(10)
                             .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                            .SetMarginBottom(3);
+                            .SetMarginBottom(8);
                         document.Add(title);
                         
-                        // Add date/time
-                        Paragraph dateTime = new Paragraph($"Generated Report:  Date: {DateTime.Now:MM/dd/yyyy}     Time: {DateTime.Now:h:mm tt} {GetTimeZoneAbbreviation(TimeZoneInfo.Local)}")
-                            .SetFont(font)
-                            .SetFontSize(8)
-                            .SetItalic()
-                            .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
-                            .SetMarginBottom(5);
-                        document.Add(dateTime);
+                        // Date/time omitted for GeoTables per markup (kept for alignment reports)
 
                         // Create table with 11 columns - optimized widths for compact display
                         float[] columnWidths = { 9f, 8f, 6f, 9f, 12f, 11f, 11f, 13f, 12f, 13f, 13f };
@@ -3446,13 +3432,13 @@ namespace GeoTableReports
             double degreeOfCurveRad = (radius > 0) ? (100.0 / radius) : 0;
 
             // Row 1: Start (PC/SC)
-            table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph("CURVE").SetFont(font).SetFontSize(8))
+            table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph("CURVE").SetFont(font).SetFontSize(6.5f))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                 .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
             
             // Curve Number cell with Oval Renderer
-            var curveNoCell = new iText.Layout.Element.Cell(3, 1).Add(new Paragraph(curveLabel).SetFont(font).SetFontSize(8))
+            var curveNoCell = new iText.Layout.Element.Cell(3, 1).Add(new Paragraph(curveLabel).SetFont(font).SetFontSize(6.5f))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                 .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f));
@@ -3476,9 +3462,9 @@ namespace GeoTableReports
                 .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
                 .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
 
-            // Row 2: PI (no bearing per InRails standard)
+            // Row 2: PI (no station/bearing per markup)
             table.AddCell(CreateLabelCell("PI", font));
-            table.AddCell(CreateDataCell(FormatStation(piStation), font));
+            table.AddCell(CreateDataCell("", font)); // Station deleted per markup
             table.AddCell(CreateDataCell("", font)); // Empty bearing column for PI
             table.AddCell(CreateDataCell($"{yPI:F4}", font));
             table.AddCell(CreateDataCell($"{xPI:F4}", font));
@@ -3653,11 +3639,11 @@ namespace GeoTableReports
                 if (showStart)
                 {
                     // Row: TS
-                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("SPIRAL").SetFont(font).SetFontSize(8))
+                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("SPIRAL").SetFont(font).SetFontSize(6.5f))
                         .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                         .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                         .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("").SetFont(font).SetFontSize(8))
+                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("").SetFont(font).SetFontSize(6.5f))
                         .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                         .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
                         
@@ -3674,11 +3660,11 @@ namespace GeoTableReports
                 if (showEnd)
                 {
                     // Row: ST
-                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("SPIRAL").SetFont(font).SetFontSize(8))
+                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("SPIRAL").SetFont(font).SetFontSize(6.5f))
                         .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                         .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                         .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("").SetFont(font).SetFontSize(8))
+                    table.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph("").SetFont(font).SetFontSize(6.5f))
                         .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                         .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
                         
@@ -3714,10 +3700,10 @@ namespace GeoTableReports
             catch (System.Exception ex)
             {
                 // Add error row
-                table.AddCell(new iText.Layout.Element.Cell(1, 2).Add(new Paragraph("SPIRAL ERROR").SetFont(font).SetFontSize(8))
+                table.AddCell(new iText.Layout.Element.Cell(1, 2).Add(new Paragraph("SPIRAL ERROR").SetFont(font).SetFontSize(6.5f))
                     .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                     .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
-                table.AddCell(new iText.Layout.Element.Cell(1, 5).Add(new Paragraph($"Error: {ex.Message}").SetFont(font).SetFontSize(7))
+                table.AddCell(new iText.Layout.Element.Cell(1, 5).Add(new Paragraph($"Error: {ex.Message}").SetFont(font).SetFontSize(6.5f))
                     .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
             }
         }
