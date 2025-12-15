@@ -26,6 +26,7 @@ using iText.Layout.Element;
 using iText.Layout.Properties;
 using iText.Layout.Borders;
 using iText.Kernel.Font;
+using iText.IO.Font;
 using iText.IO.Font.Constants;
 using iText.Kernel.Colors;
 using iText.Layout.Renderer;
@@ -1334,9 +1335,11 @@ namespace GeoTableReports
                 Document document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
                 document.SetMargins(50, 50, 50, 50);
 
-                // Define fonts
-                PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.COURIER_BOLD);
-                PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.COURIER);
+                // Define fonts - use Arial with Unicode encoding to support Greek symbols (θ, Δ)
+                string courierPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "cour.ttf");
+                string courierBoldPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "courbd.ttf");
+                PdfFont boldFont = PdfFontFactory.CreateFont(courierBoldPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+                PdfFont normalFont = PdfFontFactory.CreateFont(courierPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
 
                 // Add title and header info
                 document.Add(new Paragraph($"Project Name: {projectName}")
@@ -2020,9 +2023,11 @@ namespace GeoTableReports
                     Document document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
                     document.SetMargins(50, 50, 50, 50);
 
-                    // Define fonts
-                    PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.COURIER_BOLD);
-                    PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.COURIER);
+                    // Define fonts - use Courier with Unicode encoding to support Greek symbols (θ, Δ)
+                    string courierPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "cour.ttf");
+                    string courierBoldPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "courbd.ttf");
+                    PdfFont boldFont = PdfFontFactory.CreateFont(courierBoldPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+                    PdfFont normalFont = PdfFontFactory.CreateFont(courierPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
 
                     // Write header
                     document.Add(new Paragraph($"Project Name: {projectName}").SetFont(boldFont).SetFontSize(11));
@@ -3835,9 +3840,11 @@ namespace GeoTableReports
                         // Set smaller margins to fit content
                         document.SetMargins(20, 20, 20, 20);
 
-                        // Create fonts - use Arial (Helvetica) with smaller sizes
-                        PdfFont font = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
-                        PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+                        // Create fonts - use Arial with Unicode encoding to support Greek symbols (θ, Δ)
+                        string arialPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf");
+                        string arialBoldPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arialbd.ttf");
+                        PdfFont font = PdfFontFactory.CreateFont(arialPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+                        PdfFont boldFont = PdfFontFactory.CreateFont(arialBoldPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
 
                         // Title - smaller font
                         string trackName = alignment.Name?.ToUpper() ?? "TRACK GEOMETRY DATA";
