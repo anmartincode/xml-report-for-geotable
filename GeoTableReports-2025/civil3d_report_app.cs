@@ -285,7 +285,27 @@ namespace GeoTableReports
             {
                 var e = alignment.Entities[i];
                 if (e == null) continue;
-                
+
+                // Civil 3D may represent Spiral-Curve-Spiral as a single AlignmentSCS entity.
+                // For reporting, treat it as 2 spirals + 1 arc so downstream formats remain consistent.
+                if (TryGetSpiralCurveSpiral(e, out var scs))
+                {
+                    if (scs.SpiralIn != null) spirals++;
+                    if (scs.Arc != null) arcs++;
+                    if (scs.SpiralOut != null) spirals++;
+
+                    if (data.HorizontalSampleLines.Count < 15)
+                    {
+                        foreach (var expanded in ExpandEntityForReports(e))
+                        {
+                            if (expanded == null) continue;
+                            if (data.HorizontalSampleLines.Count >= 15) break;
+                            try { AddHorizontalSampleLine(alignment, expanded, i, data); } catch { }
+                        }
+                    }
+                    continue;
+                }
+
                 if (e.EntityType == AlignmentEntityType.Line) lines++;
                 else if (e.EntityType == AlignmentEntityType.Arc) arcs++;
                 else if (e.EntityType == AlignmentEntityType.Spiral) spirals++;
@@ -475,13 +495,13 @@ namespace GeoTableReports
                 .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f)));
 
             // NORTHING with left-divider
-            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatWithProperRounding(northing, 4)).SetFont(font).SetFontSize(9))
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatRounded(northing, 4)).SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
                 .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f)));
 
             // EASTING
-            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatWithProperRounding(easting, 4)).SetFont(font).SetFontSize(9))
+            dataTable.AddCell(new iText.Layout.Element.Cell().Add(new Paragraph(FormatRounded(easting, 4)).SetFont(font).SetFontSize(9))
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.RIGHT)
                 .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
                 .SetBorderLeft(new SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f)));
@@ -841,9 +861,22 @@ namespace GeoTableReports
         {
             var elements = new System.Collections.Generic.List<XElement>();
 
+            // Expand AlignmentSCS (spiral-curve-spiral) into its component entities so
+            // existing XML consumers continue receiving <Arc> and <Spiral> nodes.
+            var reportEntities = new System.Collections.Generic.List<AlignmentEntity>();
             for (int i = 0; i < alignment.Entities.Count; i++)
             {
-                AlignmentEntity entity = alignment.Entities[i];
+                var entity = alignment.Entities[i];
+                if (entity == null) continue;
+                foreach (var expanded in ExpandEntityForReports(entity))
+                {
+                    if (expanded != null) reportEntities.Add(expanded);
+                }
+            }
+
+            for (int i = 0; i < reportEntities.Count; i++)
+            {
+                AlignmentEntity entity = reportEntities[i];
                 if (entity == null) continue;
 
                 try
@@ -961,20 +994,28 @@ namespace GeoTableReports
                             break;
 
                         case AlignmentEntityType.Spiral:
-                            var spiral = entity as AlignmentSpiral;
-                            if (spiral != null)
+                            try
                             {
+                                dynamic d = entity;
+                                double startStation = d.StartStation;
+                                double endStation = d.EndStation;
+                                double length = d.Length;
+                                double radiusIn = 0;
+                                double radiusOut = 0;
+                                try { radiusIn = d.RadiusIn; } catch { }
+                                try { radiusOut = d.RadiusOut; } catch { }
+
                                 double x1 = 0, y1 = 0, z1 = 0;
                                 double x2 = 0, y2 = 0, z2 = 0;
-                                alignment.PointLocation(spiral.StartStation, 0, 0, ref x1, ref y1, ref z1);
-                                alignment.PointLocation(spiral.EndStation, 0, 0, ref x2, ref y2, ref z2);
+                                alignment.PointLocation(startStation, 0, 0, ref x1, ref y1, ref z1);
+                                alignment.PointLocation(endStation, 0, 0, ref x2, ref y2, ref z2);
 
                                 elements.Add(new XElement("Spiral",
-                                    new XElement("StartStation", spiral.StartStation),
-                                    new XElement("EndStation", spiral.EndStation),
-                                    new XElement("Length", spiral.Length),
-                                    new XElement("RadiusIn", spiral.RadiusIn),
-                                    new XElement("RadiusOut", spiral.RadiusOut),
+                                    new XElement("StartStation", startStation),
+                                    new XElement("EndStation", endStation),
+                                    new XElement("Length", length),
+                                    new XElement("RadiusIn", radiusIn),
+                                    new XElement("RadiusOut", radiusOut),
                                     new XElement("StartPoint",
                                         new XElement("Northing", y1),
                                         new XElement("Easting", x1)
@@ -984,6 +1025,104 @@ namespace GeoTableReports
                                         new XElement("Easting", x2)
                                     )
                                 ));
+                            }
+                            catch
+                            {
+                                // Skip spirals that can't be processed
+                            }
+                            break;
+
+                        case AlignmentEntityType.SpiralCurveSpiral:
+                            try
+                            {
+                                var scsEntity = entity as AlignmentSCS;
+                                if (scsEntity != null)
+                                {
+                                    // Add SpiralIn
+                                    if (scsEntity.SpiralIn != null)
+                                    {
+                                        var spiralIn = scsEntity.SpiralIn;
+                                        double x1 = 0, y1 = 0, z1 = 0;
+                                        double x2 = 0, y2 = 0, z2 = 0;
+                                        alignment.PointLocation(spiralIn.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                                        alignment.PointLocation(spiralIn.EndStation, 0, 0, ref x2, ref y2, ref z2);
+                                        elements.Add(new XElement("Spiral",
+                                            new XElement("Type", "SpiralIn"),
+                                            new XElement("StartStation", spiralIn.StartStation),
+                                            new XElement("EndStation", spiralIn.EndStation),
+                                            new XElement("Length", spiralIn.Length),
+                                            new XElement("RadiusIn", spiralIn.RadiusIn),
+                                            new XElement("RadiusOut", spiralIn.RadiusOut),
+                                            new XElement("StartPoint",
+                                                new XElement("Northing", y1),
+                                                new XElement("Easting", x1)
+                                            ),
+                                            new XElement("EndPoint",
+                                                new XElement("Northing", y2),
+                                                new XElement("Easting", x2)
+                                            )
+                                        ));
+                                    }
+
+                                    // Add Arc
+                                    if (scsEntity.Arc != null)
+                                    {
+                                        var scsArc = scsEntity.Arc;
+                                        double xa1 = 0, ya1 = 0, za1 = 0;
+                                        double xa2 = 0, ya2 = 0, za2 = 0;
+                                        alignment.PointLocation(scsArc.StartStation, 0, 0, ref xa1, ref ya1, ref za1);
+                                        alignment.PointLocation(scsArc.EndStation, 0, 0, ref xa2, ref ya2, ref za2);
+                                        double deltaRadians = scsArc.Length / Math.Abs(scsArc.Radius);
+                                        double deltaDegrees = deltaRadians * (180.0 / Math.PI);
+                                        elements.Add(new XElement("Arc",
+                                            new XElement("Type", "SCSArc"),
+                                            new XElement("StartStation", scsArc.StartStation),
+                                            new XElement("EndStation", scsArc.EndStation),
+                                            new XElement("Length", scsArc.Length),
+                                            new XElement("Radius", scsArc.Radius),
+                                            new XElement("Delta", Math.Abs(deltaDegrees)),
+                                            new XElement("Direction", scsArc.Clockwise ? "Right" : "Left"),
+                                            new XElement("StartPoint",
+                                                new XElement("Northing", ya1),
+                                                new XElement("Easting", xa1)
+                                            ),
+                                            new XElement("EndPoint",
+                                                new XElement("Northing", ya2),
+                                                new XElement("Easting", xa2)
+                                            )
+                                        ));
+                                    }
+
+                                    // Add SpiralOut
+                                    if (scsEntity.SpiralOut != null)
+                                    {
+                                        var spiralOut = scsEntity.SpiralOut;
+                                        double x1 = 0, y1 = 0, z1 = 0;
+                                        double x2 = 0, y2 = 0, z2 = 0;
+                                        alignment.PointLocation(spiralOut.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                                        alignment.PointLocation(spiralOut.EndStation, 0, 0, ref x2, ref y2, ref z2);
+                                        elements.Add(new XElement("Spiral",
+                                            new XElement("Type", "SpiralOut"),
+                                            new XElement("StartStation", spiralOut.StartStation),
+                                            new XElement("EndStation", spiralOut.EndStation),
+                                            new XElement("Length", spiralOut.Length),
+                                            new XElement("RadiusIn", spiralOut.RadiusIn),
+                                            new XElement("RadiusOut", spiralOut.RadiusOut),
+                                            new XElement("StartPoint",
+                                                new XElement("Northing", y1),
+                                                new XElement("Easting", x1)
+                                            ),
+                                            new XElement("EndPoint",
+                                                new XElement("Northing", y2),
+                                                new XElement("Easting", x2)
+                                            )
+                                        ));
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // Skip SCS elements that can't be processed
                             }
                             break;
                     }
@@ -1254,14 +1393,26 @@ namespace GeoTableReports
                 // Reorder entities to match InRails format
                 var reorderedEntities = ReorderEntitiesForInRails(alignment);
 
-                // Process each entity
+                // Expand AlignmentSCS into SpiralIn/Arc/SpiralOut so all parts appear in the report.
+                var reportEntities = new System.Collections.Generic.List<AlignmentEntity>();
                 for (int i = 0; i < reorderedEntities.Count; i++)
                 {
-                    AlignmentEntity entity = reorderedEntities[i];
+                    var e = reorderedEntities[i];
+                    if (e == null) continue;
+                    foreach (var expanded in ExpandEntityForReports(e))
+                    {
+                        if (expanded != null) reportEntities.Add(expanded);
+                    }
+                }
+
+                // Process each entity
+                for (int i = 0; i < reportEntities.Count; i++)
+                {
+                    AlignmentEntity entity = reportEntities[i];
                     if (entity == null) continue;
 
-                    AlignmentEntity prevEntity = i > 0 ? reorderedEntities[i - 1] : null;
-                    AlignmentEntity nextEntity = i < reorderedEntities.Count - 1 ? reorderedEntities[i + 1] : null;
+                    AlignmentEntity prevEntity = i > 0 ? reportEntities[i - 1] : null;
+                    AlignmentEntity nextEntity = i < reportEntities.Count - 1 ? reportEntities[i + 1] : null;
 
                     try
                     {
@@ -1275,6 +1426,9 @@ namespace GeoTableReports
                                 break;
                             case AlignmentEntityType.Spiral:
                                 WriteSpiralElementPdf(document, entity, alignment, i, normalFont, boldFont, prevEntity, nextEntity);
+                                break;
+                            case AlignmentEntityType.SpiralCurveSpiral:
+                                WriteSCSElementPdf(document, entity as AlignmentSCS, alignment, i, normalFont, boldFont, prevEntity, nextEntity);
                                 break;
                             default:
                                 document.Add(new Paragraph($"Element: {entity.EntityType}").SetFont(normalFont).SetFontSize(10));
@@ -1650,6 +1804,107 @@ namespace GeoTableReports
             {
                 document.Add(new Paragraph("Element: Clothoid").SetFont(labelFont).SetFontSize(10));
                 document.Add(new Paragraph($"Error writing spiral data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+            }
+        }
+
+        /// <summary>
+        /// Write Spiral-Curve-Spiral (SCS) element to horizontal alignment PDF report.
+        /// This handles the AlignmentSCS entity type which contains SpiralIn, Arc, and SpiralOut sub-entities.
+        /// </summary>
+        private void WriteSCSElementPdf(Document document, AlignmentSCS scs, CivDb.Alignment alignment, int index, PdfFont normalFont, PdfFont boldFont, AlignmentEntity prevEntity, AlignmentEntity nextEntity)
+        {
+            if (scs == null)
+            {
+                document.Add(new Paragraph("Element: Spiral-Curve-Spiral").SetFont(boldFont).SetFontSize(10));
+                document.Add(new Paragraph("Unable to read SCS data.").SetFont(normalFont).SetFontSize(10));
+                document.Add(new Paragraph("\n"));
+                return;
+            }
+
+            try
+            {
+                document.Add(new Paragraph("Element: Spiral-Curve-Spiral (Compound)").SetFont(boldFont).SetFontSize(10));
+                document.Add(new Paragraph("\n").SetFontSize(2));
+
+                // SpiralIn
+                if (scs.SpiralIn != null)
+                {
+                    var spiralIn = scs.SpiralIn;
+                    var (x1, y1, _) = GetPointAtStation(alignment, spiralIn.StartStation);
+                    var (x2, y2, _) = GetPointAtStation(alignment, spiralIn.EndStation);
+
+                    document.Add(new Paragraph("  Entry Spiral (Clothoid)").SetFont(boldFont).SetFontSize(9).SetMarginLeft(10));
+                    AddHorizontalDataRow(document, "TS  ( )", FormatStation(spiralIn.StartStation), y1, x1, normalFont);
+                    AddHorizontalDataRow(document, "SC  ( )", FormatStation(spiralIn.EndStation), y2, x2, normalFont);
+                    document.Add(new Paragraph($"    Length: {spiralIn.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph($"    Radius In: {FormatRadius(spiralIn.RadiusIn)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph($"    Radius Out: {FormatRadius(spiralIn.RadiusOut)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph($"    A: {spiralIn.A:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph("\n").SetFontSize(2));
+                }
+
+                // Arc
+                if (scs.Arc != null)
+                {
+                    var arc = scs.Arc;
+                    var (x1, y1, _) = GetPointAtStation(alignment, arc.StartStation);
+                    var (x2, y2, _) = GetPointAtStation(alignment, arc.EndStation);
+                    double deltaRadians = arc.Length / Math.Abs(arc.Radius);
+                    double deltaDegrees = deltaRadians * (180.0 / Math.PI);
+
+                    // Calculate curve center
+                    double centerN = 0, centerE = 0;
+                    try
+                    {
+                        var centerPoint = arc.CenterPoint;
+                        centerE = centerPoint.X;
+                        centerN = centerPoint.Y;
+                    }
+                    catch
+                    {
+                        // Fallback calculation if CenterPoint not available
+                        double midStation = (arc.StartStation + arc.EndStation) / 2;
+                        double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
+                        double xc = 0, yc = 0, zc = 0;
+                        alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
+                        centerE = xc;
+                        centerN = yc;
+                    }
+
+                    document.Add(new Paragraph("  Circular Arc").SetFont(boldFont).SetFontSize(9).SetMarginLeft(10));
+                    AddHorizontalDataRow(document, "SC  ( )", FormatStation(arc.StartStation), y1, x1, normalFont);
+                    AddHorizontalDataRow(document, "CC  ( )", "               ", centerN, centerE, normalFont);
+                    AddHorizontalDataRow(document, "CS  ( )", FormatStation(arc.EndStation), y2, x2, normalFont);
+                    document.Add(new Paragraph($"    Radius: {arc.Radius:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph($"    Delta: {FormatAngle(Math.Abs(deltaDegrees))} {(arc.Clockwise ? "Right" : "Left")}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph($"    Length: {arc.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph("\n").SetFontSize(2));
+                }
+
+                // SpiralOut
+                if (scs.SpiralOut != null)
+                {
+                    var spiralOut = scs.SpiralOut;
+                    var (x1, y1, _) = GetPointAtStation(alignment, spiralOut.StartStation);
+                    var (x2, y2, _) = GetPointAtStation(alignment, spiralOut.EndStation);
+
+                    document.Add(new Paragraph("  Exit Spiral (Clothoid)").SetFont(boldFont).SetFontSize(9).SetMarginLeft(10));
+                    AddHorizontalDataRow(document, "CS  ( )", FormatStation(spiralOut.StartStation), y1, x1, normalFont);
+                    AddHorizontalDataRow(document, "ST  ( )", FormatStation(spiralOut.EndStation), y2, x2, normalFont);
+                    document.Add(new Paragraph($"    Length: {spiralOut.Length:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph($"    Radius In: {FormatRadius(spiralOut.RadiusIn)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph($"    Radius Out: {FormatRadius(spiralOut.RadiusOut)}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph($"    A: {spiralOut.A:F4}").SetFont(normalFont).SetFontSize(9).SetMarginLeft(10));
+                    document.Add(new Paragraph("\n").SetFontSize(2));
+                }
+
+                document.Add(new Paragraph("\n").SetFontSize(2));
+            }
+            catch (System.Exception ex)
+            {
+                document.Add(new Paragraph("Element: Spiral-Curve-Spiral").SetFont(boldFont).SetFontSize(10));
+                document.Add(new Paragraph($"Error writing SCS data: {ex.Message}").SetFont(normalFont).SetFontSize(10));
                 document.Add(new Paragraph("\n"));
             }
         }
@@ -2138,6 +2393,280 @@ namespace GeoTableReports
         }
 
         /// <summary>
+        /// Calculate the PI (Point of Intersection) as the intersection of the two adjacent tangent lines.
+        /// This finds the tangent lines before and after the curve (looking past any spirals) and computes their intersection.
+        /// Used for GeoTable reports per InRoads convention where PI is always the tangent intersection.
+        /// </summary>
+        private (double PIEasting, double PINorthing) CalculateTangentIntersectionPI(
+            AlignmentArc arc, 
+            CivDb.Alignment alignment, 
+            System.Collections.Generic.List<AlignmentEntity> sortedEntities, 
+            int arcIndex)
+        {
+            double xPI = 0, yPI = 0;
+            double tempZ = 0;
+            const double stationTolerance = 0.1; // feet
+
+            // Check if this arc has adjacent spirals (is part of a spiral-curve-spiral)
+            // For spiraled curves, we need to find the LINE entities adjacent to the spirals
+            AlignmentEntity entrySpiral = null;
+            AlignmentEntity exitSpiral = null;
+            
+            if (sortedEntities != null && arcIndex >= 0 && arcIndex < sortedEntities.Count)
+            {
+                foreach (var entity in sortedEntities)
+                {
+                    if (entity == null) continue;
+                    double entityEnd = SafeEndStation(entity);
+                    double entityStart = SafeStartStation(entity);
+                    
+                    // Entry spiral ends at arc start
+                    if (Math.Abs(entityEnd - arc.StartStation) < stationTolerance)
+                    {
+                        if (entity.EntityType == AlignmentEntityType.Spiral || entity is AlignmentSCS)
+                            entrySpiral = entity;
+                    }
+                    // Exit spiral starts at arc end
+                    if (Math.Abs(entityStart - arc.EndStation) < stationTolerance)
+                    {
+                        if (entity.EntityType == AlignmentEntityType.Spiral || entity is AlignmentSCS)
+                            exitSpiral = entity;
+                    }
+                    if (entrySpiral != null && exitSpiral != null) break;
+                }
+            }
+
+            // For spiraled curves: Find the tangent LINES adjacent to the spirals
+            // PI = intersection of entry tangent line and exit tangent line
+            if (entrySpiral != null || exitSpiral != null)
+            {
+                double entryTangentDir = 0, exitTangentDir = 0;
+                double entryPointE = 0, entryPointN = 0;
+                double exitPointE = 0, exitPointN = 0;
+                bool foundEntryTangent = false, foundExitTangent = false;
+                
+                // Get the station where entry spiral starts (TS)
+                double tsStation = entrySpiral != null ? SafeStartStation(entrySpiral) : arc.StartStation;
+                // Get the station where exit spiral ends (ST)
+                double stStation = exitSpiral != null ? SafeEndStation(exitSpiral) : arc.EndStation;
+                
+                // Find LINE entities adjacent to the spirals
+                foreach (var entity in sortedEntities)
+                {
+                    if (entity == null) continue;
+                    
+                    // Find entry tangent LINE (ends at TS)
+                    if (!foundEntryTangent && entrySpiral != null)
+                    {
+                        double entityEnd = SafeEndStation(entity);
+                        if (Math.Abs(entityEnd - tsStation) < stationTolerance)
+                        {
+                            if (entity.EntityType == AlignmentEntityType.Line)
+                            {
+                                var line = entity as AlignmentLine;
+                                if (line != null)
+                                {
+                                    alignment.PointLocation(tsStation, 0, 0, ref entryPointE, ref entryPointN, ref tempZ);
+                                    entryTangentDir = line.Direction;
+                                    foundEntryTangent = true;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Find exit tangent LINE (starts at ST)
+                    if (!foundExitTangent && exitSpiral != null)
+                    {
+                        double entityStart = SafeStartStation(entity);
+                        if (Math.Abs(entityStart - stStation) < stationTolerance)
+                        {
+                            if (entity.EntityType == AlignmentEntityType.Line)
+                            {
+                                var line = entity as AlignmentLine;
+                                if (line != null)
+                                {
+                                    alignment.PointLocation(stStation, 0, 0, ref exitPointE, ref exitPointN, ref tempZ);
+                                    exitTangentDir = line.Direction;
+                                    foundExitTangent = true;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (foundEntryTangent && foundExitTangent) break;
+                }
+                
+                // If no entry spiral, use arc start direction
+                if (entrySpiral == null)
+                {
+                    alignment.PointLocation(arc.StartStation, 0, 0, ref entryPointE, ref entryPointN, ref tempZ);
+                    entryTangentDir = arc.StartDirection;
+                    foundEntryTangent = true;
+                }
+                
+                // If no exit spiral, use arc end direction
+                if (exitSpiral == null)
+                {
+                    alignment.PointLocation(arc.EndStation, 0, 0, ref exitPointE, ref exitPointN, ref tempZ);
+                    exitTangentDir = arc.EndDirection;
+                    foundExitTangent = true;
+                }
+                
+                // Calculate intersection of the two tangent lines
+                if (foundEntryTangent && foundExitTangent)
+                {
+                    double dx1 = Math.Cos(entryTangentDir);
+                    double dy1 = Math.Sin(entryTangentDir);
+                    double dx2 = Math.Cos(exitTangentDir);
+                    double dy2 = Math.Sin(exitTangentDir);
+
+                    double denom = dx1 * dy2 - dy1 * dx2;
+                    if (Math.Abs(denom) > 1e-10)
+                    {
+                        double diffX = exitPointE - entryPointE;
+                        double diffY = exitPointN - entryPointN;
+                        double t = (diffX * dy2 - diffY * dx2) / denom;
+                        xPI = entryPointE + t * dx1;
+                        yPI = entryPointN + t * dy1;
+                        return (xPI, yPI);
+                    }
+                }
+            }
+
+            // For simple curves (no spirals): Use adjacent tangent LINE directions
+            if (sortedEntities != null && arcIndex >= 0 && arcIndex < sortedEntities.Count)
+            {
+                double entryDir = 0, exitDir = 0;
+                double tsE = 0, tsN = 0, stE = 0, stN = 0;
+                bool foundEntry = false, foundExit = false;
+
+                foreach (var entity in sortedEntities)
+                {
+                    if (entity == null) continue;
+
+                    // Check if this entity ends at our arc's start (entry element)
+                    if (!foundEntry)
+                    {
+                        double entityEndStation = 0;
+                        try { entityEndStation = SafeEndStation(entity); } catch { continue; }
+
+                        if (Math.Abs(entityEndStation - arc.StartStation) < stationTolerance)
+                        {
+                            if (entity.EntityType == AlignmentEntityType.Line)
+                            {
+                                var line = entity as AlignmentLine;
+                                if (line != null)
+                                {
+                                    alignment.PointLocation(line.EndStation, 0, 0, ref tsE, ref tsN, ref tempZ);
+                                    entryDir = line.Direction;
+                                    foundEntry = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // Check if this entity starts at our arc's end (exit element)
+                    if (!foundExit)
+                    {
+                        double entityStartStation = 0;
+                        try { entityStartStation = SafeStartStation(entity); } catch { continue; }
+
+                        if (Math.Abs(entityStartStation - arc.EndStation) < stationTolerance)
+                        {
+                            if (entity.EntityType == AlignmentEntityType.Line)
+                            {
+                                var line = entity as AlignmentLine;
+                                if (line != null)
+                                {
+                                    alignment.PointLocation(line.StartStation, 0, 0, ref stE, ref stN, ref tempZ);
+                                    exitDir = line.Direction;
+                                    foundExit = true;
+                                }
+                            }
+                        }
+                    }
+
+                    if (foundEntry && foundExit) break;
+                }
+
+                if (foundEntry && foundExit)
+                {
+                    double dx1 = Math.Cos(entryDir);
+                    double dy1 = Math.Sin(entryDir);
+                    double dx2 = Math.Cos(exitDir);
+                    double dy2 = Math.Sin(exitDir);
+                    double denom = dx1 * dy2 - dy1 * dx2;
+
+                    if (Math.Abs(denom) > 1e-10)
+                    {
+                        double diffX = stE - tsE;
+                        double diffY = stN - tsN;
+                        double t = (diffX * dy2 - diffY * dx2) / denom;
+                        xPI = tsE + t * dx1;
+                        yPI = tsN + t * dy1;
+                        return (xPI, yPI);
+                    }
+                }
+            }
+
+            // Fallback: intersect tangents at the curve endpoints (PC/PT for simple curves).
+            double pcX = 0, pcY = 0, pcZ = 0;
+            double ptX = 0, ptY = 0, ptZ = 0;
+            alignment.PointLocation(arc.StartStation, 0, 0, ref pcX, ref pcY, ref pcZ);
+            alignment.PointLocation(arc.EndStation, 0, 0, ref ptX, ref ptY, ref ptZ);
+
+            double startDir = arc.StartDirection;
+            double endDir = arc.EndDirection;
+
+            {
+                double dx1 = Math.Cos(startDir);
+                double dy1 = Math.Sin(startDir);
+                double dx2 = Math.Cos(endDir);
+                double dy2 = Math.Sin(endDir);
+
+                double denom = dx1 * dy2 - dy1 * dx2;
+                if (Math.Abs(denom) > 1e-10)
+                {
+                    double diffX = ptX - pcX;
+                    double diffY = ptY - pcY;
+                    double t = (diffX * dy2 - diffY * dx2) / denom;
+                    xPI = pcX + t * dx1;
+                    yPI = pcY + t * dy1;
+                    return (xPI, yPI);
+                }
+            }
+
+            // Fallback: Try to get PI from sub-entity
+            try
+            {
+                if (arc.SubEntityCount > 0)
+                {
+                    var subEntity = arc[0];
+                    if (subEntity is AlignmentSubEntityArc subEntityArc)
+                    {
+                        var piPoint = subEntityArc.PIPoint;
+                        xPI = piPoint.X;
+                        yPI = piPoint.Y;
+                        return (xPI, yPI);
+                    }
+                }
+            }
+            catch { }
+
+            // Final fallback: Calculate from arc geometry
+            double x1 = 0, y1 = 0, z1 = 0;
+            alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
+            double radius = Math.Abs(arc.Radius);
+            double delta = arc.Length / radius;
+            double tc = CalculateTangentDistance(radius, delta);
+            double backTangentDir = arc.StartDirection + Math.PI;
+            xPI = x1 + tc * Math.Cos(backTangentDir);
+            yPI = y1 + tc * Math.Sin(backTangentDir);
+
+            return (xPI, yPI);
+        }
+
+        /// <summary>
         /// Calculate curve center coordinates
         /// </summary>
         private void CalculateCurveCenter(AlignmentArc arc, CivDb.Alignment alignment, out double centerNorthing, out double centerEasting)
@@ -2538,32 +3067,24 @@ namespace GeoTableReports
                     }
 
                     // Sort by start station
-                    sortedEntities.Sort((a, b) =>
-                    {
-                        double stationA = 0;
-                        double stationB = 0;
+                    sortedEntities.Sort((a, b) => SafeStartStation(a).CompareTo(SafeStartStation(b)));
 
-                        if (a.EntityType == AlignmentEntityType.Line)
-                            stationA = (a as AlignmentLine).StartStation;
-                        else if (a.EntityType == AlignmentEntityType.Arc)
-                            stationA = (a as AlignmentArc).StartStation;
-                        else if (a.EntityType == AlignmentEntityType.Spiral)
-                            stationA = (a as AlignmentSpiral).StartStation;
-
-                        if (b.EntityType == AlignmentEntityType.Line)
-                            stationB = (b as AlignmentLine).StartStation;
-                        else if (b.EntityType == AlignmentEntityType.Arc)
-                            stationB = (b as AlignmentArc).StartStation;
-                        else if (b.EntityType == AlignmentEntityType.Spiral)
-                            stationB = (b as AlignmentSpiral).StartStation;
-
-                        return stationA.CompareTo(stationB);
-                    });
-
-                    // Process alignment entities in sorted order
+                    // Expand AlignmentSCS into component entities for GeoTable output
+                    var reportEntities = new System.Collections.Generic.List<AlignmentEntity>();
                     for (int i = 0; i < sortedEntities.Count; i++)
                     {
-                        AlignmentEntity entity = sortedEntities[i];
+                        var e = sortedEntities[i];
+                        if (e == null) continue;
+                        foreach (var expanded in ExpandEntityForReports(e))
+                        {
+                            if (expanded != null) reportEntities.Add(expanded);
+                        }
+                    }
+
+                    // Process alignment entities in sorted order
+                    for (int i = 0; i < reportEntities.Count; i++)
+                    {
+                        AlignmentEntity entity = reportEntities[i];
                         if (entity == null) continue;
 
                         try
@@ -2575,10 +3096,13 @@ namespace GeoTableReports
                                     break;
                                 case AlignmentEntityType.Arc:
                                     curveNumber++;
-                                    row = WriteGeoTableCurveExcel(ws, entity as AlignmentArc, alignment, i, row, curveNumber);
+                                    row = WriteGeoTableCurveExcel(ws, entity as AlignmentArc, alignment, i, row, curveNumber, reportEntities);
                                     break;
                                 case AlignmentEntityType.Spiral:
                                     row = WriteGeoTableSpiralExcel(ws, entity, alignment, i, row);
+                                    break;
+                                case AlignmentEntityType.SpiralCurveSpiral:
+                                    row = WriteGeoTableSCSExcel(ws, entity as AlignmentSCS, alignment, i, row, ref curveNumber, reportEntities);
                                     break;
                             }
                         }
@@ -2720,7 +3244,7 @@ namespace GeoTableReports
             }
         }
 
-        private int WriteGeoTableCurveExcel(ExcelWorksheet ws, AlignmentArc arc, CivDb.Alignment alignment, int index, int row, int curveNumber)
+        private int WriteGeoTableCurveExcel(ExcelWorksheet ws, AlignmentArc arc, CivDb.Alignment alignment, int index, int row, int curveNumber, System.Collections.Generic.List<AlignmentEntity> sortedEntities)
         {
             if (arc == null) return row + 3;
 
@@ -2743,65 +3267,34 @@ namespace GeoTableReports
                 string directionStr = arc.Clockwise ? "R" : "L";
                 string deltaAngle = FormatAngleDMS(delta);
 
-                // Get PI station and coordinates from arc properties
-                double piStation = arc.PIStation;
+                // Get PI as intersection of adjacent tangent lines (per InRoads convention for GeoTable)
+                // This ensures PI is consistent whether curve has spirals or not
+                var (xPI, yPI) = CalculateTangentIntersectionPI(arc, alignment, sortedEntities, index);
 
-                // Try to get PI and Center coordinates from sub-entities
-                double xPI = 0, yPI = 0, centerE = 0, centerN = 0;
-                bool gotFromSubEntity = false;
-                string debugMessage = "";
+                // Get Center coordinates from sub-entity or calculate
+                double centerE = 0, centerN = 0;
+                bool gotCenterFromSubEntity = false;
 
                 try
                 {
-                    debugMessage = $"SubEntityCount: {arc.SubEntityCount}";
-
-                    // Access the first sub-entity which should be the arc itself
                     if (arc.SubEntityCount > 0)
                     {
                         var subEntity = arc[0];
-                        debugMessage += $" | SubEntity Type: {subEntity.GetType().Name}";
-
-                        if (subEntity is AlignmentSubEntityArc)
+                        if (subEntity is AlignmentSubEntityArc subEntityArc)
                         {
-                            var subEntityArc = subEntity as AlignmentSubEntityArc;
-                            var piPoint = subEntityArc.PIPoint;
                             var centerPoint = subEntityArc.CenterPoint;
-
-                            xPI = piPoint.X;  // Easting
-                            yPI = piPoint.Y;  // Northing
-                            centerE = centerPoint.X;  // Easting
-                            centerN = centerPoint.Y;  // Northing
-                            gotFromSubEntity = true;
-                            debugMessage += $" | SUCCESS: PI({xPI:F4},{yPI:F4}) CC({centerE:F4},{centerN:F4})";
-                        }
-                        else
-                        {
-                            debugMessage += " | FAILED: Not AlignmentSubEntityArc";
+                            centerE = centerPoint.X;
+                            centerN = centerPoint.Y;
+                            gotCenterFromSubEntity = true;
                         }
                     }
-                    else
-                    {
-                        debugMessage += " | FAILED: No sub-entities";
-                    }
                 }
-                catch (System.Exception ex)
-                {
-                    gotFromSubEntity = false;
-                    debugMessage += $" | EXCEPTION: {ex.Message}";
-                }
+                catch { gotCenterFromSubEntity = false; }
 
-                // Fallback: calculate if sub-entity access failed
-                if (!gotFromSubEntity)
+                if (!gotCenterFromSubEntity)
                 {
                     CalculateCurveCenter(arc, alignment, out centerN, out centerE);
-                    double backTangentDir = arc.StartDirection - Math.PI;
-                    xPI = x1 - tc * Math.Cos(backTangentDir);
-                    yPI = y1 - tc * Math.Sin(backTangentDir);
-                    debugMessage += $" | FALLBACK: PI({xPI:F4},{yPI:F4}) CC({centerE:F4},{centerN:F4})";
                 }
-
-                // Debug message removed - ed not available in this context
-                // ed.WriteMessage($"\n[DEBUG Curve {curveNumber}] {debugMessage}");
 
                 // Row 1: PC (Start of Curve per InRoads)
                 ws.Cells[row, 1].Value = "CURVE";
@@ -3118,6 +3611,241 @@ namespace GeoTableReports
         }
 
         /// <summary>
+        /// Write Spiral-Curve-Spiral entity to GeoTable Excel (GLTT Standard Format)
+        /// </summary>
+        private int WriteGeoTableSCSExcel(ExcelWorksheet ws, AlignmentSCS scs, CivDb.Alignment alignment, int index, int row, ref int curveNumber, System.Collections.Generic.List<AlignmentEntity> sortedEntities)
+        {
+            if (scs == null) return row + 6;
+
+            try
+            {
+                // Entry Spiral
+                if (scs.SpiralIn != null)
+                {
+                    var spiralIn = scs.SpiralIn;
+                    int startRow = row;
+
+                    double x1 = 0, y1 = 0, z1 = 0;
+                    double x2 = 0, y2 = 0, z2 = 0;
+                    alignment.PointLocation(spiralIn.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                    alignment.PointLocation(spiralIn.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+                    double spiralAngle = spiralIn.Length / (2.0 * Math.Abs(spiralIn.RadiusOut));
+                    double theta = spiralAngle;
+
+                    ws.Cells[row, 1].Value = "SPIRAL";
+                    ws.Cells[row, 3].Value = "TS";
+                    ws.Cells[row, 4].Value = FormatStation(spiralIn.StartStation);
+                    ws.Cells[row, 5].Value = FormatBearingDMS(spiralIn.StartDirection);
+                    ws.Cells[row, 6].Value = y1;
+                    ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
+                    ws.Cells[row, 7].Value = x1;
+                    ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
+                    ws.Cells[row, 8].Value = $"θs = {FormatAngleDMS(theta)}";
+                    ws.Cells[row, 9].Value = $"Ls= {FormatDistanceFeet(spiralIn.Length)}";
+                    ws.Cells[row, 10].Value = $"A= {spiralIn.A:F2}";
+                    ws.Cells[row, 11].Value = "";
+                    row++;
+                    // SC row is written as part of the CURVE section to avoid duplication
+                }
+
+                // Arc
+                if (scs.Arc != null)
+                {
+                    var arc = scs.Arc;
+                    curveNumber++;
+                    int startRow = row;
+
+                    double x1 = 0, y1 = 0, z1 = 0;
+                    double x2 = 0, y2 = 0, z2 = 0;
+                    alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                    alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+                    double radius = Math.Abs(arc.Radius);
+                    double delta = arc.Length / radius;
+                    double tc = CalculateTangentDistance(radius, delta);
+                    double ec = CalculateExternalDistance(radius, delta);
+                    string directionStr = arc.Clockwise ? "R" : "L";
+
+                    double centerE = 0, centerN = 0;
+                    try
+                    {
+                        var centerPoint = arc.CenterPoint;
+                        centerE = centerPoint.X;
+                        centerN = centerPoint.Y;
+                    }
+                    catch
+                    {
+                        // Fallback: calculate center from midpoint offset
+                        double midStation = (arc.StartStation + arc.EndStation) / 2;
+                        double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
+                        double xc = 0, yc = 0, zc = 0;
+                        alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
+                        centerE = xc;
+                        centerN = yc;
+                    }
+
+                    ws.Cells[row, 1].Value = "CURVE";
+                    ws.Cells[row, 2].Value = $"{curveNumber}-{directionStr}";
+                    ws.Cells[row, 3].Value = "SC";
+                    ws.Cells[row, 4].Value = FormatStation(arc.StartStation);
+                    ws.Cells[row, 5].Value = "";
+                    ws.Cells[row, 6].Value = y1;
+                    ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
+                    ws.Cells[row, 7].Value = x1;
+                    ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
+                    ws.Cells[row, 8].Value = $"Δc = {FormatAngleDMS(delta)}";
+                    ws.Cells[row, 9].Value = $"R= {radius:F2}'";
+                    ws.Cells[row, 10].Value = $"Lc= {FormatDistanceFeet(arc.Length)}";
+                    ws.Cells[row, 11].Value = "";
+                    row++;
+
+                    // Get PI (Point of Intersection) - for SCS, this is the intersection of tangents at TS and ST
+                    // (the "CurvesetPoint" in InRoads terminology)
+                    double piN = 0, piE = 0;
+                    bool gotPI = false;
+                    
+                    // For SCS: Use the tangent directions at TS (entry spiral start) and ST (exit spiral end)
+                    // These are the directions of the tangent lines that define the curveset PI
+                    if (scs.SpiralIn != null && scs.SpiralOut != null)
+                    {
+                        // Get TS point and direction (entry tangent)
+                        double tsE = 0, tsN = 0, tsZ = 0;
+                        alignment.PointLocation(scs.SpiralIn.StartStation, 0, 0, ref tsE, ref tsN, ref tsZ);
+                        double dir1 = scs.SpiralIn.StartDirection;
+
+                        // Get ST point and direction (exit tangent)
+                        double stE = 0, stN = 0, stZ = 0;
+                        alignment.PointLocation(scs.SpiralOut.EndStation, 0, 0, ref stE, ref stN, ref stZ);
+                        double dir2 = scs.SpiralOut.EndDirection;
+
+                        // DEBUG: Show message box with direction values
+                        double dir1Deg = dir1 * 180.0 / Math.PI;
+                        double dir2Deg = dir2 * 180.0 / Math.PI;
+                        string debugMsg = $"=== SCS PI DEBUG (CURVE {curveNumber}) ===\n\n" +
+                            $"TS Point: N {tsN:F4}, E {tsE:F4}\n" +
+                            $"ST Point: N {stN:F4}, E {stE:F4}\n\n" +
+                            $"SpiralIn.StartDirection: {dir1:F6} rad ({dir1Deg:F4}°)\n" +
+                            $"SpiralOut.EndDirection: {dir2:F6} rad ({dir2Deg:F4}°)\n\n" +
+                            $"Bearing at TS: {FormatBearingDMS(dir1)}\n" +
+                            $"Bearing at ST: {FormatBearingDMS(dir2)}\n\n" +
+                            $"Angle difference: {Math.Abs(dir2Deg - dir1Deg):F4}°";
+                        System.Windows.Forms.MessageBox.Show(debugMsg, $"PI Debug - Curve {curveNumber}");
+
+                        // Calculate intersection of the two tangent lines
+                        double dx1 = Math.Cos(dir1);
+                        double dy1 = Math.Sin(dir1);
+                        double dx2 = Math.Cos(dir2);
+                        double dy2 = Math.Sin(dir2);
+
+                        double denom = dx1 * dy2 - dy1 * dx2;
+                        
+                        if (Math.Abs(denom) > 1e-10)
+                        {
+                            double diffX = stE - tsE;
+                            double diffY = stN - tsN;
+                            double t = (diffX * dy2 - diffY * dx2) / denom;
+                            piE = tsE + t * dx1;
+                            piN = tsN + t * dy1;
+                            gotPI = true;
+                            
+                            // DEBUG: Show calculation result
+                            string calcMsg = $"Calculation:\n" +
+                                $"dx1={dx1:F6}, dy1={dy1:F6}\n" +
+                                $"dx2={dx2:F6}, dy2={dy2:F6}\n" +
+                                $"denom: {denom:F10}\n" +
+                                $"diffX={diffX:F4}, diffY={diffY:F4}\n" +
+                                $"t parameter: {t:F4}\n\n" +
+                                $"Calculated PI: N {piN:F4}, E {piE:F4}";
+                            System.Windows.Forms.MessageBox.Show(calcMsg, $"PI Calculation - Curve {curveNumber}");
+                        }
+                        else
+                        {
+                            System.Windows.Forms.MessageBox.Show($"WARNING: denom too small ({denom:F10}), lines nearly parallel!", "PI Warning");
+                        }
+                    }
+                    
+                    // Fallback: Use arc's PIPoint if tangent calculation failed
+                    if (!gotPI)
+                    {
+                        try
+                        {
+                            var piPoint = arc.PIPoint;
+                            piE = piPoint.X;
+                            piN = piPoint.Y;
+                        }
+                        catch { }
+                    }
+
+                    ws.Cells[row, 3].Value = "PI";
+                    ws.Cells[row, 4].Value = "";
+                    ws.Cells[row, 5].Value = "";
+                    ws.Cells[row, 6].Value = piN;
+                    ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
+                    ws.Cells[row, 7].Value = piE;
+                    ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
+                    ws.Cells[row, 8].Value = "";
+                    ws.Cells[row, 9].Value = "";
+                    ws.Cells[row, 10].Value = "";
+                    ws.Cells[row, 11].Value = "";
+                    row++;
+
+                    ws.Cells[row, 3].Value = "CS";
+                    ws.Cells[row, 4].Value = FormatStation(arc.EndStation);
+                    ws.Cells[row, 5].Value = "";
+                    ws.Cells[row, 6].Value = y2;
+                    ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
+                    ws.Cells[row, 7].Value = x2;
+                    ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
+                    ws.Cells[row, 8].Value = $"Tc= {FormatDistanceFeet(tc)}";
+                    ws.Cells[row, 9].Value = $"Ec= {FormatDistanceFeet(ec)}";
+                    ws.Cells[row, 10].Value = $"CC:N {centerN:F4}";
+                    ws.Cells[row, 11].Value = $"E {centerE:F4}";
+                    row++;
+
+                    ws.Cells[startRow, 1, row - 1, 1].Merge = true;
+                    ws.Cells[startRow, 2, row - 1, 2].Merge = true;
+                }
+
+                // Exit Spiral
+                if (scs.SpiralOut != null)
+                {
+                    var spiralOut = scs.SpiralOut;
+                    int startRow = row;
+
+                    double x1 = 0, y1 = 0, z1 = 0;
+                    double x2 = 0, y2 = 0, z2 = 0;
+                    alignment.PointLocation(spiralOut.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                    alignment.PointLocation(spiralOut.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+                    double spiralAngle = spiralOut.Length / (2.0 * Math.Abs(spiralOut.RadiusIn));
+                    double theta = spiralAngle;
+
+                    // CS row is written as part of the CURVE section to avoid duplication
+                    ws.Cells[row, 1].Value = "SPIRAL";
+                    ws.Cells[row, 3].Value = "ST";
+                    ws.Cells[row, 4].Value = FormatStation(spiralOut.EndStation);
+                    ws.Cells[row, 5].Value = FormatBearingDMS(spiralOut.EndDirection);
+                    ws.Cells[row, 6].Value = y2;
+                    ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
+                    ws.Cells[row, 7].Value = x2;
+                    ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
+                    ws.Cells[row, 8].Value = $"θs = {FormatAngleDMS(theta)}";
+                    ws.Cells[row, 9].Value = $"Ls= {FormatDistanceFeet(spiralOut.Length)}";
+                    ws.Cells[row, 10].Value = $"A= {spiralOut.A:F2}";
+                    ws.Cells[row, 11].Value = "";
+                    row++;
+                }
+
+                return row;
+            }
+            catch
+            {
+                return row + 6;
+            }
+        }
+
+        /// <summary>
         /// Generate horizontal alignment GeoTable report in PDF (GLTT Standard Format)
         /// </summary>
         private void GenerateHorizontalGeoTablePdf(CivDb.Alignment alignment, string outputPath)
@@ -3234,15 +3962,27 @@ namespace GeoTableReports
                         // Sort by start station (robust to entity runtime types)
                         sortedEntities.Sort((a, b) => SafeStartStation(a).CompareTo(SafeStartStation(b)));
 
-                        // Process alignment entities in sorted order
-                        int curveNumber = 0;
+                        // Expand AlignmentSCS into component entities so CURVE/SPIRAL rows are produced
+                        var reportEntities = new System.Collections.Generic.List<AlignmentEntity>();
                         for (int i = 0; i < sortedEntities.Count; i++)
                         {
-                            AlignmentEntity entity = sortedEntities[i];
+                            var e = sortedEntities[i];
+                            if (e == null) continue;
+                            foreach (var expanded in ExpandEntityForReports(e))
+                            {
+                                if (expanded != null) reportEntities.Add(expanded);
+                            }
+                        }
+
+                        // Process alignment entities in sorted order
+                        int curveNumber = 0;
+                        for (int i = 0; i < reportEntities.Count; i++)
+                        {
+                            AlignmentEntity entity = reportEntities[i];
                             if (entity == null) continue;
 
-                            AlignmentEntity prevEntity = i > 0 ? sortedEntities[i - 1] : null;
-                            AlignmentEntity nextEntity = i < sortedEntities.Count - 1 ? sortedEntities[i + 1] : null;
+                            AlignmentEntity prevEntity = i > 0 ? reportEntities[i - 1] : null;
+                            AlignmentEntity nextEntity = i < reportEntities.Count - 1 ? reportEntities[i + 1] : null;
 
                             try
                             {
@@ -3253,10 +3993,13 @@ namespace GeoTableReports
                                         break;
                                     case AlignmentEntityType.Arc:
                                         curveNumber++;
-                                        AddGeoTableCurvePdf(table, entity as AlignmentArc, alignment, i, curveNumber, font, prevEntity, nextEntity);
+                                        AddGeoTableCurvePdf(table, entity as AlignmentArc, alignment, i, curveNumber, font, prevEntity, nextEntity, reportEntities);
                                         break;
                                     case AlignmentEntityType.Spiral:
                                         AddGeoTableSpiralPdf(table, entity, alignment, i, font, prevEntity, nextEntity);
+                                        break;
+                                    case AlignmentEntityType.SpiralCurveSpiral:
+                                        AddGeoTableSCSPdf(table, entity as AlignmentSCS, alignment, i, ref curveNumber, font, reportEntities);
                                         break;
                                 }
                             }
@@ -3301,6 +4044,143 @@ namespace GeoTableReports
             {
                 return double.MaxValue; // push unknowns to end, avoids comparer exceptions
             }
+        }
+
+        private double SafeEndStation(AlignmentEntity entity)
+        {
+            try
+            {
+                dynamic d = entity;
+                double s = d.EndStation;
+                if (double.IsNaN(s) || double.IsInfinity(s)) return double.MinValue;
+                return s;
+            }
+            catch
+            {
+                return double.MinValue;
+            }
+        }
+
+        private sealed class SpiralCurveSpiral
+        {
+            public AlignmentEntity RawEntity { get; }
+            public AlignmentEntity SpiralIn { get; }
+            public AlignmentArc Arc { get; }
+            public AlignmentEntity SpiralOut { get; }
+
+            public double StartStation { get; }
+            public double EndStation { get; }
+
+            public double TotalLength
+            {
+                get
+                {
+                    double total = 0;
+                    total += SafeLength(SpiralIn);
+                    if (Arc != null) total += Arc.Length;
+                    total += SafeLength(SpiralOut);
+                    return total;
+                }
+            }
+
+            public SpiralCurveSpiral(
+                AlignmentEntity rawEntity,
+                AlignmentEntity spiralIn,
+                AlignmentArc arc,
+                AlignmentEntity spiralOut,
+                double startStation,
+                double endStation)
+            {
+                RawEntity = rawEntity;
+                SpiralIn = spiralIn;
+                Arc = arc;
+                SpiralOut = spiralOut;
+                StartStation = startStation;
+                EndStation = endStation;
+            }
+        }
+
+        private static double SafeLength(AlignmentEntity entity)
+        {
+            if (entity == null) return 0;
+            try
+            {
+                dynamic d = entity;
+                double len = d.Length;
+                if (double.IsNaN(len) || double.IsInfinity(len) || len < 0) return 0;
+                return len;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private bool TryGetSpiralCurveSpiral(AlignmentEntity entity, out SpiralCurveSpiral scs)
+        {
+            scs = null;
+            if (entity == null) return false;
+
+            // Civil 3D's API class is AlignmentSCS; use type check + dynamic property access for robustness.
+            if (!(entity is AlignmentSCS) && !string.Equals(entity.GetType().Name, "AlignmentSCS", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            try
+            {
+                dynamic d = entity;
+                object arcObj = null;
+                object spiralInObj = null;
+                object spiralOutObj = null;
+                try { arcObj = d.Arc; } catch { }
+                try { spiralInObj = d.SpiralIn; } catch { }
+                try { spiralOutObj = d.SpiralOut; } catch { }
+
+                var arc = arcObj as AlignmentArc;
+                var spiralIn = spiralInObj as AlignmentEntity;
+                var spiralOut = spiralOutObj as AlignmentEntity;
+
+                double startStation = 0;
+                double endStation = 0;
+                try { startStation = d.StartStation; } catch { }
+                try { endStation = d.EndStation; } catch { }
+
+                // If start/end are not exposed at the parent, derive from components.
+                if (startStation == 0 && spiralIn != null) startStation = SafeStartStation(spiralIn);
+                if (startStation == 0 && arc != null) startStation = arc.StartStation;
+                if (endStation == 0)
+                {
+                    try
+                    {
+                        if (spiralOut != null) endStation = (spiralOut as dynamic).EndStation;
+                        else if (arc != null) endStation = arc.EndStation;
+                    }
+                    catch { }
+                }
+
+                scs = new SpiralCurveSpiral(entity, spiralIn, arc, spiralOut, startStation, endStation);
+                return scs.Arc != null || scs.SpiralIn != null || scs.SpiralOut != null;
+            }
+            catch
+            {
+                scs = null;
+                return false;
+            }
+        }
+
+        private System.Collections.Generic.IEnumerable<AlignmentEntity> ExpandEntityForReports(AlignmentEntity entity)
+        {
+            if (entity == null) yield break;
+
+            // Do NOT expand SCS entities - they need to be processed as compound entities
+            // to correctly calculate PI from the entry and exit tangent directions
+            if (TryGetSpiralCurveSpiral(entity, out var scs))
+            {
+                // Return the SCS as-is, don't break it apart
+                yield return entity;
+                yield break;
+            }
+
+            yield return entity;
         }
 
         private iText.Layout.Element.Cell CreateHeaderCell(string text, PdfFont font, int rowspan, int colspan)
@@ -3376,7 +4256,7 @@ namespace GeoTableReports
                 .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
         }
 
-        private void AddGeoTableCurvePdf(iText.Layout.Element.Table table, AlignmentArc arc, CivDb.Alignment alignment, int index, int curveNumber, PdfFont font, AlignmentEntity prevEntity, AlignmentEntity nextEntity)
+        private void AddGeoTableCurvePdf(iText.Layout.Element.Table table, AlignmentArc arc, CivDb.Alignment alignment, int index, int curveNumber, PdfFont font, AlignmentEntity prevEntity, AlignmentEntity nextEntity, System.Collections.Generic.List<AlignmentEntity> sortedEntities)
         {
             if (arc == null) return;
 
@@ -3389,9 +4269,13 @@ namespace GeoTableReports
             alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
             alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
 
-            double piStation = arc.PIStation;
-            double xPI = 0, yPI = 0, centerE = 0, centerN = 0;
-            bool gotFromSubEntity = false;
+            // Get PI as intersection of adjacent tangent lines (per InRoads convention for GeoTable)
+            // This ensures PI is consistent whether curve has spirals or not
+            var (xPI, yPI) = CalculateTangentIntersectionPI(arc, alignment, sortedEntities, index);
+
+            // Get Center coordinates from sub-entity or calculate
+            double centerE = 0, centerN = 0;
+            bool gotCenterFromSubEntity = false;
 
             try
             {
@@ -3400,24 +4284,18 @@ namespace GeoTableReports
                     var subEntity = arc[0];
                     if (subEntity is AlignmentSubEntityArc subEntityArc)
                     {
-                        var piPoint = subEntityArc.PIPoint;
                         var centerPoint = subEntityArc.CenterPoint;
-                        xPI = piPoint.X;
-                        yPI = piPoint.Y;
                         centerE = centerPoint.X;
                         centerN = centerPoint.Y;
-                        gotFromSubEntity = true;
+                        gotCenterFromSubEntity = true;
                     }
                 }
             }
-            catch { gotFromSubEntity = false; }
+            catch { gotCenterFromSubEntity = false; }
 
-            if (!gotFromSubEntity)
+            if (!gotCenterFromSubEntity)
             {
                 CalculateCurveCenter(arc, alignment, out centerN, out centerE);
-                double backTangentDir = arc.StartDirection - Math.PI;
-                xPI = x1 - tc * Math.Cos(backTangentDir);
-                yPI = y1 - tc * Math.Sin(backTangentDir);
             }
 
             string curveDir = arc.Clockwise ? "R" : "L";
@@ -3704,6 +4582,237 @@ namespace GeoTableReports
                     .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                     .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
                 table.AddCell(new iText.Layout.Element.Cell(1, 5).Add(new Paragraph($"Error: {ex.Message}").SetFont(font).SetFontSize(6.5f))
+                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+            }
+        }
+
+        /// <summary>
+        /// Add Spiral-Curve-Spiral entity to GeoTable PDF (GLTT Standard Format)
+        /// </summary>
+        private void AddGeoTableSCSPdf(iText.Layout.Element.Table table, AlignmentSCS scs, CivDb.Alignment alignment, int index, ref int curveNumber, PdfFont font, System.Collections.Generic.List<AlignmentEntity> sortedEntities)
+        {
+            if (scs == null) return;
+
+            try
+            {
+                // Entry Spiral
+                if (scs.SpiralIn != null)
+                {
+                    var spiralIn = scs.SpiralIn;
+                    double x1 = 0, y1 = 0, z1 = 0;
+                    double x2 = 0, y2 = 0, z2 = 0;
+                    alignment.PointLocation(spiralIn.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                    alignment.PointLocation(spiralIn.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+                    double spiralAngle = spiralIn.Length / (2.0 * Math.Abs(spiralIn.RadiusOut));
+
+                    // Row: TS
+                    table.AddCell(CreateDataCell("SPIRAL", font));
+                    table.AddCell(CreateDataCell("", font));
+                    table.AddCell(CreateDataCell("TS", font));
+                    table.AddCell(CreateDataCell(FormatStation(spiralIn.StartStation), font));
+                    table.AddCell(CreateDataCell(FormatBearingDMS(spiralIn.StartDirection), font));
+                    table.AddCell(CreateDataCell($"{y1:F4}", font));
+                    table.AddCell(CreateDataCell($"{x1:F4}", font));
+                    table.AddCell(CreateDataCellNoBorder($"θs = {FormatAngleDMS(spiralAngle)}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"Ls= {spiralIn.Length:F2}'", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"A= {spiralIn.A:F2}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder("", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    // SC row is written as part of the CURVE section to avoid duplication
+                }
+
+                // Arc
+                if (scs.Arc != null)
+                {
+                    var arc = scs.Arc;
+                    curveNumber++;
+
+                    double x1 = 0, y1 = 0, z1 = 0;
+                    double x2 = 0, y2 = 0, z2 = 0;
+                    alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                    alignment.PointLocation(arc.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+                    double radius = Math.Abs(arc.Radius);
+                    double delta = arc.Length / radius;
+                    double tc = CalculateTangentDistance(radius, delta);
+                    double ec = CalculateExternalDistance(radius, delta);
+                    string curveDir = arc.Clockwise ? "R" : "L";
+                    string curveLabel = $"{curveNumber}-{curveDir}";
+
+                    double centerE = 0, centerN = 0;
+                    try
+                    {
+                        var centerPoint = arc.CenterPoint;
+                        centerE = centerPoint.X;
+                        centerN = centerPoint.Y;
+                    }
+                    catch
+                    {
+                        // Fallback: calculate center from midpoint offset
+                        double midStation = (arc.StartStation + arc.EndStation) / 2;
+                        double offset = arc.Clockwise ? -arc.Radius : arc.Radius;
+                        double xc = 0, yc = 0, zc = 0;
+                        alignment.PointLocation(midStation, offset, 0, ref xc, ref yc, ref zc);
+                        centerE = xc;
+                        centerN = yc;
+                    }
+
+                    // Row: SC (start of curve from spiral)
+                    table.AddCell(new iText.Layout.Element.Cell(3, 1).Add(new Paragraph("CURVE").SetFont(font).SetFontSize(6.5f))
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                        .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    var curveNoCell = new iText.Layout.Element.Cell(3, 1).Add(new Paragraph(curveLabel).SetFont(font).SetFontSize(6.5f))
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                        .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f));
+                    curveNoCell.SetNextRenderer(new OvalCellRenderer(curveNoCell));
+                    table.AddCell(curveNoCell);
+
+                    table.AddCell(CreateDataCell("SC", font));
+                    table.AddCell(CreateDataCell(FormatStation(arc.StartStation), font));
+                    table.AddCell(CreateDataCell("", font));
+                    table.AddCell(CreateDataCell($"{y1:F4}", font));
+                    table.AddCell(CreateDataCell($"{x1:F4}", font));
+                    table.AddCell(CreateDataCellNoBorder($"Δc = {FormatAngleDMS(delta)}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"R= {radius:F2}'", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"Lc= {arc.Length:F2}'", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder("", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+
+                    // Get PI (Point of Intersection) - for SCS, this is the intersection of tangent directions
+                    // at the TS (spiral start) and ST (spiral end) points
+                    double piN = 0, piE = 0;
+                    bool gotPI = false;
+                    
+                    // Calculate PI using intersection of tangent directions at TS and ST
+                    // Get TS point and direction (entry tangent)
+                    double tsE = 0, tsN = 0, tsZ = 0;
+                    alignment.PointLocation(scs.SpiralIn.StartStation, 0, 0, ref tsE, ref tsN, ref tsZ);
+                    double dir1 = scs.SpiralIn.StartDirection;
+                    
+                    // Get ST point and direction (exit tangent)
+                    double stE = 0, stN = 0, stZ2 = 0;
+                    alignment.PointLocation(scs.SpiralOut.EndStation, 0, 0, ref stE, ref stN, ref stZ2);
+                    double dir2 = scs.SpiralOut.EndDirection;
+                    
+                    // Calculate intersection of the two tangent lines
+                    double dx1 = Math.Cos(dir1);
+                    double dy1 = Math.Sin(dir1);
+                    double dx2 = Math.Cos(dir2);
+                    double dy2 = Math.Sin(dir2);
+                    
+                    double denom = dx1 * dy2 - dy1 * dx2;
+                    if (Math.Abs(denom) > 1e-10)
+                    {
+                        double diffX = stE - tsE;
+                        double diffY = stN - tsN;
+                        double t = (diffX * dy2 - diffY * dx2) / denom;
+                        piE = tsE + t * dx1;
+                        piN = tsN + t * dy1;
+                        gotPI = true;
+                    }
+                    
+                    // Fallback: Use arc's PIPoint if calculation failed
+                    if (!gotPI)
+                    {
+                        try
+                        {
+                            var piPoint = arc.PIPoint;
+                            piE = piPoint.X;
+                            piN = piPoint.Y;
+                        }
+                        catch { }
+                    }
+
+                    table.AddCell(CreateDataCell("PI", font));
+                    table.AddCell(CreateDataCell("", font));
+                    table.AddCell(CreateDataCell("", font));
+                    table.AddCell(CreateDataCell($"{piN:F4}", font));
+                    table.AddCell(CreateDataCell($"{piE:F4}", font));
+                    table.AddCell(CreateDataCellNoBorder("", font)
+                        .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder("", font));
+                    table.AddCell(CreateDataCellNoBorder("", font));
+                    table.AddCell(CreateDataCellNoBorder("", font)
+                        .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+
+                    // Row: CS (end of curve to spiral)
+                    table.AddCell(CreateDataCell("CS", font));
+                    table.AddCell(CreateDataCell(FormatStation(arc.EndStation), font));
+                    table.AddCell(CreateDataCell("", font));
+                    table.AddCell(CreateDataCell($"{y2:F4}", font));
+                    table.AddCell(CreateDataCell($"{x2:F4}", font));
+                    table.AddCell(CreateDataCellNoBorder($"Tc= {tc:F2}'", font)
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"Ec= {ec:F2}'", font)
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(new iText.Layout.Element.Cell(1, 2)
+                        .Add(new Paragraph($"CC:N {centerN:F4}  E {centerE:F4}").SetFont(font).SetFontSize(6.5f))
+                        .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                        .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
+                        .SetBackgroundColor(ColorConstants.WHITE)
+                        .SetBorder(iText.Layout.Borders.Border.NO_BORDER)
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetPadding(1));
+                }
+
+                // Exit Spiral
+                if (scs.SpiralOut != null)
+                {
+                    var spiralOut = scs.SpiralOut;
+                    double x1 = 0, y1 = 0, z1 = 0;
+                    double x2 = 0, y2 = 0, z2 = 0;
+                    alignment.PointLocation(spiralOut.StartStation, 0, 0, ref x1, ref y1, ref z1);
+                    alignment.PointLocation(spiralOut.EndStation, 0, 0, ref x2, ref y2, ref z2);
+
+                    double spiralAngle = spiralOut.Length / (2.0 * Math.Abs(spiralOut.RadiusIn));
+
+                    // CS row is written as part of the CURVE section to avoid duplication
+                    // Row: ST only (with spiral parameters)
+                    table.AddCell(CreateDataCell("SPIRAL", font));
+                    table.AddCell(CreateDataCell("", font));
+                    table.AddCell(CreateDataCell("ST", font));
+                    table.AddCell(CreateDataCell(FormatStation(spiralOut.EndStation), font));
+                    table.AddCell(CreateDataCell(FormatBearingDMS(spiralOut.EndDirection), font));
+                    table.AddCell(CreateDataCell($"{y2:F4}", font));
+                    table.AddCell(CreateDataCell($"{x2:F4}", font));
+                    table.AddCell(CreateDataCellNoBorder($"θs = {FormatAngleDMS(spiralAngle)}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderLeft(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"Ls= {spiralOut.Length:F2}'", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder($"A= {spiralOut.A:F2}", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                    table.AddCell(CreateDataCellNoBorder("", font)
+                        .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderBottom(new SolidBorder(ColorConstants.BLACK, 0.5f))
+                        .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                }
+            }
+            catch (System.Exception ex)
+            {
+                // Add error row
+                table.AddCell(new iText.Layout.Element.Cell(1, 2).Add(new Paragraph("SCS ERROR").SetFont(font).SetFontSize(6.5f))
+                    .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
+                    .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
+                table.AddCell(new iText.Layout.Element.Cell(1, 9).Add(new Paragraph($"Error: {ex.Message}").SetFont(font).SetFontSize(6.5f))
                     .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f)));
             }
         }
