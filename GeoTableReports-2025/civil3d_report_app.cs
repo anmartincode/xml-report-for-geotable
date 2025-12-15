@@ -2436,100 +2436,68 @@ namespace GeoTableReports
                 }
             }
 
-            // For spiraled curves: Find the tangent LINES adjacent to the spirals
-            // PI = intersection of entry tangent line and exit tangent line
+            // For spiraled curves: Use spiral directions at TS/ST to find PI
+            // PI = intersection of entry tangent and exit tangent
             if (entrySpiral != null || exitSpiral != null)
             {
                 double entryTangentDir = 0, exitTangentDir = 0;
                 double entryPointE = 0, entryPointN = 0;
                 double exitPointE = 0, exitPointN = 0;
-                bool foundEntryTangent = false, foundExitTangent = false;
                 
-                // Get the station where entry spiral starts (TS)
-                double tsStation = entrySpiral != null ? SafeStartStation(entrySpiral) : arc.StartStation;
-                // Get the station where exit spiral ends (ST)
-                double stStation = exitSpiral != null ? SafeEndStation(exitSpiral) : arc.EndStation;
-                
-                // Find LINE entities adjacent to the spirals
-                foreach (var entity in sortedEntities)
+                // Get entry tangent: at TS (start of entry spiral) or PC (start of arc)
+                if (entrySpiral != null)
                 {
-                    if (entity == null) continue;
-                    
-                    // Find entry tangent LINE (ends at TS)
-                    if (!foundEntryTangent && entrySpiral != null)
-                    {
-                        double entityEnd = SafeEndStation(entity);
-                        if (Math.Abs(entityEnd - tsStation) < stationTolerance)
-                        {
-                            if (entity.EntityType == AlignmentEntityType.Line)
-                            {
-                                var line = entity as AlignmentLine;
-                                if (line != null)
-                                {
-                                    alignment.PointLocation(tsStation, 0, 0, ref entryPointE, ref entryPointN, ref tempZ);
-                                    entryTangentDir = line.Direction;
-                                    foundEntryTangent = true;
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Find exit tangent LINE (starts at ST)
-                    if (!foundExitTangent && exitSpiral != null)
-                    {
-                        double entityStart = SafeStartStation(entity);
-                        if (Math.Abs(entityStart - stStation) < stationTolerance)
-                        {
-                            if (entity.EntityType == AlignmentEntityType.Line)
-                            {
-                                var line = entity as AlignmentLine;
-                                if (line != null)
-                                {
-                                    alignment.PointLocation(stStation, 0, 0, ref exitPointE, ref exitPointN, ref tempZ);
-                                    exitTangentDir = line.Direction;
-                                    foundExitTangent = true;
-                                }
-                            }
-                        }
-                    }
-                    
-                    if (foundEntryTangent && foundExitTangent) break;
+                    double tsStation = SafeStartStation(entrySpiral);
+                    alignment.PointLocation(tsStation, 0, 0, ref entryPointE, ref entryPointN, ref tempZ);
+                    // Spiral is tangent to the incoming line at TS, use spiral's StartDirection
+                    try { entryTangentDir = (double)((dynamic)entrySpiral).StartDirection; }
+                    catch { entryTangentDir = arc.StartDirection; }
                 }
-                
-                // If no entry spiral, use arc start direction
-                if (entrySpiral == null)
+                else
                 {
+                    // No entry spiral - use arc start (PC)
                     alignment.PointLocation(arc.StartStation, 0, 0, ref entryPointE, ref entryPointN, ref tempZ);
                     entryTangentDir = arc.StartDirection;
-                    foundEntryTangent = true;
                 }
                 
-                // If no exit spiral, use arc end direction
-                if (exitSpiral == null)
+                // Get exit tangent: at ST (end of exit spiral) or PT (end of arc)
+                if (exitSpiral != null)
                 {
+                    double stStation = SafeEndStation(exitSpiral);
+                    alignment.PointLocation(stStation, 0, 0, ref exitPointE, ref exitPointN, ref tempZ);
+                    // Spiral is tangent to the outgoing line at ST, use spiral's EndDirection
+                    try { exitTangentDir = (double)((dynamic)exitSpiral).EndDirection; }
+                    catch { exitTangentDir = arc.EndDirection; }
+                }
+                else
+                {
+                    // No exit spiral - use arc end (PT)
                     alignment.PointLocation(arc.EndStation, 0, 0, ref exitPointE, ref exitPointN, ref tempZ);
                     exitTangentDir = arc.EndDirection;
-                    foundExitTangent = true;
                 }
                 
                 // Calculate intersection of the two tangent lines
-                if (foundEntryTangent && foundExitTangent)
-                {
-                    double dx1 = Math.Cos(entryTangentDir);
-                    double dy1 = Math.Sin(entryTangentDir);
-                    double dx2 = Math.Cos(exitTangentDir);
-                    double dy2 = Math.Sin(exitTangentDir);
+                // Civil 3D Direction is AZIMUTH in radians (0=North, π/2=East, measured clockwise)
+                // For coordinate system where X=Easting, Y=Northing:
+                // dx (easting component) = sin(azimuth)
+                // dy (northing component) = cos(azimuth)
+                double dx1 = Math.Sin(entryTangentDir);
+                double dy1 = Math.Cos(entryTangentDir);
+                double dx2 = Math.Sin(exitTangentDir);
+                double dy2 = Math.Cos(exitTangentDir);
 
-                    double denom = dx1 * dy2 - dy1 * dx2;
-                    if (Math.Abs(denom) > 1e-10)
-                    {
-                        double diffX = exitPointE - entryPointE;
-                        double diffY = exitPointN - entryPointN;
-                        double t = (diffX * dy2 - diffY * dx2) / denom;
-                        xPI = entryPointE + t * dx1;
-                        yPI = entryPointN + t * dy1;
-                        return (xPI, yPI);
-                    }
+                double denom = dx1 * dy2 - dy1 * dx2;
+                if (Math.Abs(denom) > 1e-10)
+                {
+                    double diffX = exitPointE - entryPointE;
+                    double diffY = exitPointN - entryPointN;
+                    double t = (diffX * dy2 - diffY * dx2) / denom;
+                    
+                    // t should be positive (intersection ahead of entry point)
+                    // If negative, the lines intersect behind us - still valid PI
+                    xPI = entryPointE + t * dx1;
+                    yPI = entryPointN + t * dy1;
+                    return (xPI, yPI);
                 }
             }
 
@@ -2591,10 +2559,11 @@ namespace GeoTableReports
 
                 if (foundEntry && foundExit)
                 {
-                    double dx1 = Math.Cos(entryDir);
-                    double dy1 = Math.Sin(entryDir);
-                    double dx2 = Math.Cos(exitDir);
-                    double dy2 = Math.Sin(exitDir);
+                    // Direction is AZIMUTH: dx=sin(θ), dy=cos(θ)
+                    double dx1 = Math.Sin(entryDir);
+                    double dy1 = Math.Cos(entryDir);
+                    double dx2 = Math.Sin(exitDir);
+                    double dy2 = Math.Cos(exitDir);
                     double denom = dx1 * dy2 - dy1 * dx2;
 
                     if (Math.Abs(denom) > 1e-10)
@@ -2619,10 +2588,11 @@ namespace GeoTableReports
             double endDir = arc.EndDirection;
 
             {
-                double dx1 = Math.Cos(startDir);
-                double dy1 = Math.Sin(startDir);
-                double dx2 = Math.Cos(endDir);
-                double dy2 = Math.Sin(endDir);
+                // Direction is AZIMUTH: dx=sin(θ), dy=cos(θ)
+                double dx1 = Math.Sin(startDir);
+                double dy1 = Math.Cos(startDir);
+                double dx2 = Math.Sin(endDir);
+                double dy2 = Math.Cos(endDir);
 
                 double denom = dx1 * dy2 - dy1 * dx2;
                 if (Math.Abs(denom) > 1e-10)
@@ -2659,9 +2629,10 @@ namespace GeoTableReports
             double radius = Math.Abs(arc.Radius);
             double delta = arc.Length / radius;
             double tc = CalculateTangentDistance(radius, delta);
+            // Direction is AZIMUTH: dx=sin(θ), dy=cos(θ)
             double backTangentDir = arc.StartDirection + Math.PI;
-            xPI = x1 + tc * Math.Cos(backTangentDir);
-            yPI = y1 + tc * Math.Sin(backTangentDir);
+            xPI = x1 + tc * Math.Sin(backTangentDir);
+            yPI = y1 + tc * Math.Cos(backTangentDir);
 
             return (xPI, yPI);
         }
@@ -2681,9 +2652,10 @@ namespace GeoTableReports
             double perpDirection = arc.Clockwise ? arc.StartDirection - Math.PI / 2.0 : arc.StartDirection + Math.PI / 2.0;
 
             // Offset by radius from PC to get center
+            // Direction is AZIMUTH: dx=sin(θ), dy=cos(θ)
             double radius = Math.Abs(arc.Radius);
-            centerEasting = x1 + radius * Math.Cos(perpDirection);
-            centerNorthing = y1 + radius * Math.Sin(perpDirection);
+            centerEasting = x1 + radius * Math.Sin(perpDirection);
+            centerNorthing = y1 + radius * Math.Cos(perpDirection);
         }
 
         /// <summary>
