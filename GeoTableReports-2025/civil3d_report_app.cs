@@ -681,10 +681,23 @@ namespace GeoTableReports
 
         private string FormatStation(double station)
         {
+            // Handle floating-point precision issues by checking if value is very close 
+            // to a .XX5 boundary that might have floating-point artifacts
+            // First, round to higher precision to clean up floating-point noise
+            station = Math.Round(station, 6, MidpointRounding.AwayFromZero);
+            
+            // Now check if we're at exactly a .XX5 midpoint (within tolerance)
+            double remainder = (station * 100) % 1; // Get fractional part at 2 decimal places
+            double tolerance = 1e-9;
+            bool isAtMidpoint = Math.Abs(remainder - 0.5) < tolerance;
+            
+            // For midpoint cases, use ToEven (banker's rounding) to avoid bias
+            // For non-midpoint cases, use AwayFromZero for surveying convention
+            MidpointRounding roundingMode = isAtMidpoint ? MidpointRounding.ToEven : MidpointRounding.AwayFromZero;
+            
             int sta = (int)(station / 100);
             double offset = station - (sta * 100);
-            // Use AwayFromZero rounding for surveying precision
-            double roundedOffset = Math.Round(offset, 2, MidpointRounding.AwayFromZero);
+            double roundedOffset = Math.Round(offset, 2, roundingMode);
             return $"{sta:D2}+{roundedOffset:00.00}";
         }
 
