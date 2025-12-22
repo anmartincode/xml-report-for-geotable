@@ -4917,7 +4917,7 @@ namespace GeoTableReports
             var grpAlignment = new GroupBox { Left = 15, Top = groupTop, Width = groupWidth, Height = groupHeight, Text = "Alignment Reports" };
             chkAlignmentPdf = new CheckBox { Left = 15, Top = 25, Width = 160, Text = "Alignment PDF" };
 
-            chkAlignmentXml = new CheckBox { Left = 15, Top = 75, Width = 160, Text = "Alignment XML" };
+            chkAlignmentXml = new CheckBox { Left = 15, Top = 50, Width = 160, Text = "Alignment XML" };
             grpAlignment.Controls.AddRange(new Control[] { chkAlignmentPdf, chkAlignmentXml });
 
             var grpGeoTable = new GroupBox { Left = 355, Top = groupTop, Width = groupWidth, Height = groupHeight, Text = "GeoTable Reports" };
@@ -4935,42 +4935,20 @@ namespace GeoTableReports
             var helpButton = new Button { Left = 490, Top = buttonTop, Width = 110, Text = "Help" };
             helpButton.Click += (s, e) => System.Windows.Forms.MessageBox.Show("Help documentation coming soon.", "Help", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
 
-            // Simple icon placeholders for file types (phase 1: styling)
-            System.Drawing.Color iconBack = System.Drawing.Color.FromArgb(230,230,230);
-            PictureBox IconPdfAlign = new PictureBox { Left = 20, Top = 25, Width = 12, Height = 12, BackColor = iconBack, Parent = grpAlignment }; grpAlignment.Controls.Add(IconPdfAlign);
-
-            PictureBox IconXmlAlign = new PictureBox { Left = 20, Top = 75, Width = 12, Height = 12, BackColor = iconBack, Parent = grpAlignment }; grpAlignment.Controls.Add(IconXmlAlign);
-            chkAlignmentPdf.Left = 40;
-
-            chkAlignmentXml.Left = 40;
-
-            PictureBox IconPdfGeo = new PictureBox { Left = 20, Top = 25, Width = 12, Height = 12, BackColor = iconBack, Parent = grpGeoTable }; grpGeoTable.Controls.Add(IconPdfGeo);
-            PictureBox IconXlsGeo = new PictureBox { Left = 20, Top = 50, Width = 12, Height = 12, BackColor = iconBack, Parent = grpGeoTable }; grpGeoTable.Controls.Add(IconXlsGeo);
-            chkGeoTablePdf.Left = 40;
-            chkGeoTableExcel.Left = 40;
+            // Icon placeholders removed per user request - checkboxes aligned to left
             okButton.Click += (s, e) => { DialogResult = DialogResult.OK; Close(); };
             cancelButton.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
 
             // --- Functional feature controls ---
             // Path status indicator
             lblPathStatus = new System.Windows.Forms.Label { Left = 625, Top = 50, Width = 30, Height = 18, Text = "" };
-            chkLivePreview = new CheckBox { Left = 490, Top = 15, Width = 150, Text = "Live Preview" };
-            previewBox = new TextBox { Left = 140, Top = 72, Width = 340, Height = 70, ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Visible = false };
-            var btnRefresh = new Button { Left = 485, Top = 70, Width = 75, Height = 26, Text = "Refresh", Visible = false };
-            btnRefresh.Click += (s,e)=> { UpdatePreview(true); };
+            // Live Preview controls removed per user request
 
             // Embedded PDF preview panel (right side)
-            // Bulk selection shortcut buttons inside alignment group
-            btnSelectAll = new Button { Left = 15, Top = 110, Width = 80, Height = 24, Text = "All" };
-            btnSelectNone = new Button { Left = 100, Top = 110, Width = 80, Height = 24, Text = "None" };
-            btnSelectRecommended = new Button { Left = 185, Top = 110, Width = 120, Height = 24, Text = "Recommended" };
-            grpAlignment.Controls.AddRange(new Control[] { btnSelectAll, btnSelectNone, btnSelectRecommended });
-            btnSelectAll.Click += (s,e)=> { SetAllSelections(true); UpdatePreview(); };
-            btnSelectNone.Click += (s,e)=> { SetAllSelections(false); UpdatePreview(); };
-            btnSelectRecommended.Click += (s,e)=> { ApplyRecommended(); UpdatePreview(); };
+            // Bulk selection shortcut buttons removed per user request
 
             // Preferences checkboxes (repositioned to avoid button overlap)
-            chkRemember = new CheckBox { Left = 20, Top = 360, Width = 180, Text = "Remember my selections" };
+            chkRemember = new CheckBox { Left = 20, Top = 360, Width = 220, Text = "Remember my selections" };
             chkOpenFolder = new CheckBox { Left = 220, Top = 360, Width = 190, Text = "Open folder after creation" };
             chkOpenFiles = new CheckBox { Left = 425, Top = 360, Width = 200, Text = "Open files after creation" };
 
@@ -4981,18 +4959,13 @@ namespace GeoTableReports
             toolTip.SetToolTip(chkAlignmentXml, "XML alignment data for interoperability");
             toolTip.SetToolTip(chkGeoTablePdf, "GeoTable formatted PDF summary");
             toolTip.SetToolTip(chkGeoTableExcel, "GeoTable Excel for tabular analysis");
-            toolTip.SetToolTip(btnSelectRecommended, "Select recommended outputs for chosen report type");
             toolTip.SetToolTip(outputPathTextBox, "Base path used to build filenames; no extension");
-            toolTip.SetToolTip(chkLivePreview, "Show dynamic list of files to be generated");
-            toolTip.SetToolTip(previewBox, "Live preview of output filenames");
-            // toolTip.SetToolTip(previewBox, "Preview of filenames that will be generated"); // removed from UI
             toolTip.SetToolTip(chkRemember, "Persist these selections for next session");
             toolTip.SetToolTip(chkOpenFolder, "Open containing folder after successful generation");
             toolTip.SetToolTip(chkOpenFiles, "Open each generated file automatically");
 
             // Events for dynamic preview and validation
             reportTypeComboBox.SelectedIndexChanged += (s,e)=> { ReportType = reportTypeComboBox.SelectedItem?.ToString() ?? "Horizontal"; UpdatePreview(); };
-            chkLivePreview.CheckedChanged += (s,e)=> { previewBox.Visible = chkLivePreview.Checked; btnRefresh.Visible = chkLivePreview.Checked; UpdatePreview(true); };
             outputPathTextBox.TextChanged += (s,e)=> { ValidatePath(); UpdatePreview(); };
             chkAlignmentPdf.CheckedChanged += (s,e)=> { ValidatePath(); UpdatePreview(); };
 
@@ -5001,7 +4974,7 @@ namespace GeoTableReports
 
             Controls.AddRange(new Control[] {
                 lblType, reportTypeComboBox,
-                lblOutput, outputPathTextBox, browseButton, lblPathStatus, chkLivePreview, previewBox, btnRefresh,
+                lblOutput, outputPathTextBox, browseButton, lblPathStatus,
                 grpAlignment, grpGeoTable,
                 chkRemember, chkOpenFolder, chkOpenFiles,
                 okButton, cancelButton, helpButton
@@ -5053,37 +5026,8 @@ namespace GeoTableReports
             if (chkAlignmentXml.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_Alignment_Report.xml"));
             if (chkGeoTablePdf.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_GeoTable.pdf"));
             if (chkGeoTableExcel.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_GeoTable.xlsx"));
-            if (previewBox.Visible)
-            {
-                if (list.Count == 0)
-                {
-                    previewBox.Text = "(No outputs selected)";
-                }
-                else
-                {
-                    var sb = new System.Text.StringBuilder();
-                    sb.AppendLine($"Alignment: {previewData.AlignmentName}");
-                    sb.AppendLine($"Span: {FormatStationLocal(previewData.StartStation)} - {FormatStationLocal(previewData.EndStation)}");
-                    sb.AppendLine($"Elements: Lines={previewData.LineCount} Arcs={previewData.ArcCount} Spirals={previewData.SpiralCount}");
-                    if (!string.IsNullOrEmpty(previewData.ProfileName) && ReportType == "Vertical") sb.AppendLine($"Profile: {previewData.ProfileName}");
-                    sb.AppendLine();
-                    // For each selected format, append a snippet header + sample lines
-                    System.Collections.Generic.List<string> sample = ReportType == "Vertical" ? previewData.VerticalSampleLines : previewData.HorizontalSampleLines;
-                    int maxLinesPerFormat = 8;
-                    if (chkAlignmentPdf.Checked) AppendFormatSnippet(sb, "Alignment PDF", sample, maxLinesPerFormat);
-
-                    if (chkAlignmentXml.Checked) AppendFormatSnippet(sb, "Alignment XML", sample, maxLinesPerFormat);
-                    if (chkGeoTablePdf.Checked) AppendFormatSnippet(sb, "GeoTable PDF", sample, maxLinesPerFormat);
-                    if (chkGeoTableExcel.Checked) AppendFormatSnippet(sb, "GeoTable Excel", sample, maxLinesPerFormat);
-                    previewBox.Text = sb.ToString();
-                }
-            }
+            // Preview box removed - just update OK button state
             okButton.Enabled = lblPathStatus.Text == "✔" && list.Count > 0;
-            // Trigger PDF side preview regeneration if needed
-            // (PDF preview hook removed)
-            {
-                // (PDF preview generation removed)
-            }
         }
 
         private void AppendFormatSnippet(System.Text.StringBuilder sb, string title, System.Collections.Generic.List<string> source, int limit)
