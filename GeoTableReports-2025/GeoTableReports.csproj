@@ -6,13 +6,21 @@
     <LangVersion>latest</LangVersion>
     <OutputType>Library</OutputType>
     <AssemblyName>GeoTableReports.2025</AssemblyName>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
     <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
     <UseWindowsForms>true</UseWindowsForms>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    
+    <!-- Assembly/Publisher Information -->
+    <Company>A. Martinez</Company>
+    <Authors>A. Martinez</Authors>
+    <Product>GeoTable Reports for Civil 3D</Product>
+    <Description>Civil 3D alignment report generator for GeoTable format</Description>
+    <Copyright>Copyright © 2025 A. Martinez</Copyright>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <!-- Civil 3D 2025 Installation Path Detection -->

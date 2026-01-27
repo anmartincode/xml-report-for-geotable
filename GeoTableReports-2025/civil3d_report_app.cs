@@ -26,7 +26,6 @@ using iText.Layout.Element;
 using iText.Layout.Properties;
 using iText.Layout.Borders;
 using iText.Kernel.Font;
-using iText.IO.Font;
 using iText.IO.Font.Constants;
 using iText.Kernel.Colors;
 using iText.Layout.Renderer;
@@ -681,23 +680,10 @@ namespace GeoTableReports
 
         private string FormatStation(double station)
         {
-            // Handle floating-point precision issues by checking if value is very close 
-            // to a .XX5 boundary that might have floating-point artifacts
-            // First, round to higher precision to clean up floating-point noise
-            station = Math.Round(station, 6, MidpointRounding.AwayFromZero);
-            
-            // Now check if we're at exactly a .XX5 midpoint (within tolerance)
-            double remainder = (station * 100) % 1; // Get fractional part at 2 decimal places
-            double tolerance = 1e-9;
-            bool isAtMidpoint = Math.Abs(remainder - 0.5) < tolerance;
-            
-            // For midpoint cases, use ToEven (banker's rounding) to avoid bias
-            // For non-midpoint cases, use AwayFromZero for surveying convention
-            MidpointRounding roundingMode = isAtMidpoint ? MidpointRounding.ToEven : MidpointRounding.AwayFromZero;
-            
             int sta = (int)(station / 100);
             double offset = station - (sta * 100);
-            double roundedOffset = Math.Round(offset, 2, roundingMode);
+            // Use AwayFromZero rounding for surveying precision
+            double roundedOffset = Math.Round(offset, 2, MidpointRounding.AwayFromZero);
             return $"{sta:D2}+{roundedOffset:00.00}";
         }
 
@@ -1348,11 +1334,9 @@ namespace GeoTableReports
                 Document document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
                 document.SetMargins(50, 50, 50, 50);
 
-                // Define fonts - use Arial with Unicode encoding to support Greek symbols (θ, Δ)
-                string courierPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "cour.ttf");
-                string courierBoldPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "courbd.ttf");
-                PdfFont boldFont = PdfFontFactory.CreateFont(courierBoldPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
-                PdfFont normalFont = PdfFontFactory.CreateFont(courierPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+                // Define fonts
+                PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.COURIER_BOLD);
+                PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.COURIER);
 
                 // Add title and header info
                 document.Add(new Paragraph($"Project Name: {projectName}")
@@ -2036,11 +2020,9 @@ namespace GeoTableReports
                     Document document = new Document(pdf, iText.Kernel.Geom.PageSize.A4);
                     document.SetMargins(50, 50, 50, 50);
 
-                    // Define fonts - use Courier with Unicode encoding to support Greek symbols (θ, Δ)
-                    string courierPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "cour.ttf");
-                    string courierBoldPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "courbd.ttf");
-                    PdfFont boldFont = PdfFontFactory.CreateFont(courierBoldPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
-                    PdfFont normalFont = PdfFontFactory.CreateFont(courierPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+                    // Define fonts
+                    PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.COURIER_BOLD);
+                    PdfFont normalFont = PdfFontFactory.CreateFont(StandardFonts.COURIER);
 
                     // Write header
                     document.Add(new Paragraph($"Project Name: {projectName}").SetFont(boldFont).SetFontSize(11));
@@ -2412,8 +2394,10 @@ namespace GeoTableReports
 
         /// <summary>
         /// Calculate the PI (Point of Intersection) as the intersection of the two adjacent tangent lines.
-        /// This finds the tangent lines before and after the curve (looking past any spirals) and computes their intersection.
-        /// Used for GeoTable reports per InRoads convention where PI is always the tangent intersection.
+        /// Uses explicit 4-point line intersection formula based on stored coordinate geometry.
+        /// For two lines: Line 1: (x1,y1) → (x2,y2) and Line 2: (x3,y3) → (x4,y4)
+        /// PI_x = ((x1*y2 - y1*x2)(x3 - x4) - (x1 - x2)(x3*y4 - y3*x4)) / ((x1 - x2)(y3 - y4) - (y1 - y2)(x3 - x4))
+        /// PI_y = ((x1*y2 - y1*x2)(y3 - y4) - (y1 - y2)(x3*y4 - y3*x4)) / ((x1 - x2)(y3 - y4) - (y1 - y2)(x3 - x4))
         /// </summary>
         private (double PIEasting, double PINorthing) CalculateTangentIntersectionPI(
             AlignmentArc arc, 
@@ -2421,210 +2405,112 @@ namespace GeoTableReports
             System.Collections.Generic.List<AlignmentEntity> sortedEntities, 
             int arcIndex)
         {
+            // InRoads GeoTable PI: intersection of adjacent tangent LINE elements.
+            // For exact coordinate match, we must use stored geometry where available.
             double xPI = 0, yPI = 0;
             double tempZ = 0;
-            const double stationTolerance = 0.1; // feet
 
-            // Check if this arc has adjacent spirals (is part of a spiral-curve-spiral)
-            // For spiraled curves, we need to find the LINE entities adjacent to the spirals
-            AlignmentEntity entrySpiral = null;
-            AlignmentEntity exitSpiral = null;
+            // First, find adjacent tangent LINE entities (looking past spirals)
+            AlignmentLine entryTangent = null;
+            AlignmentLine exitTangent = null;
             
             if (sortedEntities != null && arcIndex >= 0 && arcIndex < sortedEntities.Count)
             {
-                foreach (var entity in sortedEntities)
+                // Find entry tangent
+                for (int i = arcIndex - 1; i >= 0; i--)
                 {
-                    if (entity == null) continue;
-                    double entityEnd = SafeEndStation(entity);
-                    double entityStart = SafeStartStation(entity);
-                    
-                    // Entry spiral ends at arc start
-                    if (Math.Abs(entityEnd - arc.StartStation) < stationTolerance)
+                    var entity = sortedEntities[i];
+                    if (entity.EntityType == AlignmentEntityType.Line)
                     {
-                        if (entity.EntityType == AlignmentEntityType.Spiral || entity is AlignmentSCS)
-                            entrySpiral = entity;
+                        entryTangent = entity as AlignmentLine;
+                        break;
                     }
-                    // Exit spiral starts at arc end
-                    if (Math.Abs(entityStart - arc.EndStation) < stationTolerance)
+                    if (entity.EntityType == AlignmentEntityType.Spiral)
+                        continue;
+                    break;
+                }
+
+                // Find exit tangent
+                for (int i = arcIndex + 1; i < sortedEntities.Count; i++)
+                {
+                    var entity = sortedEntities[i];
+                    if (entity.EntityType == AlignmentEntityType.Line)
                     {
-                        if (entity.EntityType == AlignmentEntityType.Spiral || entity is AlignmentSCS)
-                            exitSpiral = entity;
+                        exitTangent = entity as AlignmentLine;
+                        break;
                     }
-                    if (entrySpiral != null && exitSpiral != null) break;
+                    if (entity.EntityType == AlignmentEntityType.Spiral)
+                        continue;
+                    break;
                 }
             }
 
-            // For spiraled curves: Use spiral directions at TS/ST to find PI
-            // PI = intersection of entry tangent and exit tangent
-            if (entrySpiral != null || exitSpiral != null)
+            // If BOTH tangents exist, compute PI from their intersection (most accurate for interior curves)
+            if (entryTangent != null && exitTangent != null)
             {
-                double entryTangentDir = 0, exitTangentDir = 0;
-                double entryPointE = 0, entryPointN = 0;
-                double exitPointE = 0, exitPointN = 0;
+                double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+                double x3 = 0, y3 = 0, x4 = 0, y4 = 0;
                 
-                // Get entry tangent: at TS (start of entry spiral) or PC (start of arc)
-                if (entrySpiral != null)
+                // Get entry tangent coordinates
+                bool gotEntry = false;
+                try
                 {
-                    double tsStation = SafeStartStation(entrySpiral);
-                    alignment.PointLocation(tsStation, 0, 0, ref entryPointE, ref entryPointN, ref tempZ);
-                    // Spiral is tangent to the incoming line at TS, use spiral's StartDirection
-                    try { entryTangentDir = (double)((dynamic)entrySpiral).StartDirection; }
-                    catch { entryTangentDir = arc.StartDirection; }
+                    if (entryTangent.SubEntityCount > 0)
+                    {
+                        var subLine = entryTangent[0] as AlignmentSubEntityLine;
+                        if (subLine != null)
+                        {
+                            x1 = subLine.StartPoint.X;
+                            y1 = subLine.StartPoint.Y;
+                            x2 = subLine.EndPoint.X;
+                            y2 = subLine.EndPoint.Y;
+                            gotEntry = true;
+                        }
+                    }
                 }
-                else
+                catch { }
+                if (!gotEntry)
                 {
-                    // No entry spiral - use arc start (PC)
-                    alignment.PointLocation(arc.StartStation, 0, 0, ref entryPointE, ref entryPointN, ref tempZ);
-                    entryTangentDir = arc.StartDirection;
-                }
-                
-                // Get exit tangent: at ST (end of exit spiral) or PT (end of arc)
-                if (exitSpiral != null)
-                {
-                    double stStation = SafeEndStation(exitSpiral);
-                    alignment.PointLocation(stStation, 0, 0, ref exitPointE, ref exitPointN, ref tempZ);
-                    // Spiral is tangent to the outgoing line at ST, use spiral's EndDirection
-                    try { exitTangentDir = (double)((dynamic)exitSpiral).EndDirection; }
-                    catch { exitTangentDir = arc.EndDirection; }
-                }
-                else
-                {
-                    // No exit spiral - use arc end (PT)
-                    alignment.PointLocation(arc.EndStation, 0, 0, ref exitPointE, ref exitPointN, ref tempZ);
-                    exitTangentDir = arc.EndDirection;
+                    alignment.PointLocation(entryTangent.StartStation, 0, 0, ref x1, ref y1, ref tempZ);
+                    alignment.PointLocation(entryTangent.EndStation, 0, 0, ref x2, ref y2, ref tempZ);
                 }
                 
-                // Calculate intersection of the two tangent lines
-                // Civil 3D Direction is AZIMUTH in radians (0=North, π/2=East, measured clockwise)
-                // For coordinate system where X=Easting, Y=Northing:
-                // dx (easting component) = sin(azimuth)
-                // dy (northing component) = cos(azimuth)
-                double dx1 = Math.Sin(entryTangentDir);
-                double dy1 = Math.Cos(entryTangentDir);
-                double dx2 = Math.Sin(exitTangentDir);
-                double dy2 = Math.Cos(exitTangentDir);
+                // Get exit tangent coordinates
+                bool gotExit = false;
+                try
+                {
+                    if (exitTangent.SubEntityCount > 0)
+                    {
+                        var subLine = exitTangent[0] as AlignmentSubEntityLine;
+                        if (subLine != null)
+                        {
+                            x3 = subLine.StartPoint.X;
+                            y3 = subLine.StartPoint.Y;
+                            x4 = subLine.EndPoint.X;
+                            y4 = subLine.EndPoint.Y;
+                            gotExit = true;
+                        }
+                    }
+                }
+                catch { }
+                if (!gotExit)
+                {
+                    alignment.PointLocation(exitTangent.StartStation, 0, 0, ref x3, ref y3, ref tempZ);
+                    alignment.PointLocation(exitTangent.EndStation, 0, 0, ref x4, ref y4, ref tempZ);
+                }
 
-                double denom = dx1 * dy2 - dy1 * dx2;
+                // 4-point line intersection formula
+                double denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
                 if (Math.Abs(denom) > 1e-10)
                 {
-                    double diffX = exitPointE - entryPointE;
-                    double diffY = exitPointN - entryPointN;
-                    double t = (diffX * dy2 - diffY * dx2) / denom;
-                    
-                    // t should be positive (intersection ahead of entry point)
-                    // If negative, the lines intersect behind us - still valid PI
-                    xPI = entryPointE + t * dx1;
-                    yPI = entryPointN + t * dy1;
+                    xPI = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom;
+                    yPI = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom;
                     return (xPI, yPI);
                 }
             }
 
-            // For simple curves (no spirals): Use adjacent tangent LINE directions
-            if (sortedEntities != null && arcIndex >= 0 && arcIndex < sortedEntities.Count)
-            {
-                double entryDir = 0, exitDir = 0;
-                double tsE = 0, tsN = 0, stE = 0, stN = 0;
-                bool foundEntry = false, foundExit = false;
-
-                foreach (var entity in sortedEntities)
-                {
-                    if (entity == null) continue;
-
-                    // Check if this entity ends at our arc's start (entry element)
-                    if (!foundEntry)
-                    {
-                        double entityEndStation = 0;
-                        try { entityEndStation = SafeEndStation(entity); } catch { continue; }
-
-                        if (Math.Abs(entityEndStation - arc.StartStation) < stationTolerance)
-                        {
-                            if (entity.EntityType == AlignmentEntityType.Line)
-                            {
-                                var line = entity as AlignmentLine;
-                                if (line != null)
-                                {
-                                    alignment.PointLocation(line.EndStation, 0, 0, ref tsE, ref tsN, ref tempZ);
-                                    entryDir = line.Direction;
-                                    foundEntry = true;
-                                }
-                            }
-                        }
-                    }
-
-                    // Check if this entity starts at our arc's end (exit element)
-                    if (!foundExit)
-                    {
-                        double entityStartStation = 0;
-                        try { entityStartStation = SafeStartStation(entity); } catch { continue; }
-
-                        if (Math.Abs(entityStartStation - arc.EndStation) < stationTolerance)
-                        {
-                            if (entity.EntityType == AlignmentEntityType.Line)
-                            {
-                                var line = entity as AlignmentLine;
-                                if (line != null)
-                                {
-                                    alignment.PointLocation(line.StartStation, 0, 0, ref stE, ref stN, ref tempZ);
-                                    exitDir = line.Direction;
-                                    foundExit = true;
-                                }
-                            }
-                        }
-                    }
-
-                    if (foundEntry && foundExit) break;
-                }
-
-                if (foundEntry && foundExit)
-                {
-                    // Direction is AZIMUTH: dx=sin(θ), dy=cos(θ)
-                    double dx1 = Math.Sin(entryDir);
-                    double dy1 = Math.Cos(entryDir);
-                    double dx2 = Math.Sin(exitDir);
-                    double dy2 = Math.Cos(exitDir);
-                    double denom = dx1 * dy2 - dy1 * dx2;
-
-                    if (Math.Abs(denom) > 1e-10)
-                    {
-                        double diffX = stE - tsE;
-                        double diffY = stN - tsN;
-                        double t = (diffX * dy2 - diffY * dx2) / denom;
-                        xPI = tsE + t * dx1;
-                        yPI = tsN + t * dy1;
-                        return (xPI, yPI);
-                    }
-                }
-            }
-
-            // Fallback: intersect tangents at the curve endpoints (PC/PT for simple curves).
-            double pcX = 0, pcY = 0, pcZ = 0;
-            double ptX = 0, ptY = 0, ptZ = 0;
-            alignment.PointLocation(arc.StartStation, 0, 0, ref pcX, ref pcY, ref pcZ);
-            alignment.PointLocation(arc.EndStation, 0, 0, ref ptX, ref ptY, ref ptZ);
-
-            double startDir = arc.StartDirection;
-            double endDir = arc.EndDirection;
-
-            {
-                // Direction is AZIMUTH: dx=sin(θ), dy=cos(θ)
-                double dx1 = Math.Sin(startDir);
-                double dy1 = Math.Cos(startDir);
-                double dx2 = Math.Sin(endDir);
-                double dy2 = Math.Cos(endDir);
-
-                double denom = dx1 * dy2 - dy1 * dx2;
-                if (Math.Abs(denom) > 1e-10)
-                {
-                    double diffX = ptX - pcX;
-                    double diffY = ptY - pcY;
-                    double t = (diffX * dy2 - diffY * dx2) / denom;
-                    xPI = pcX + t * dx1;
-                    yPI = pcY + t * dy1;
-                    return (xPI, yPI);
-                }
-            }
-
-            // Fallback: Try to get PI from sub-entity
+            // For boundary curves (missing entry or exit tangent), prefer stored PI from sub-entity
+            // This matches InRoads behavior where PI is stored as part of the curve definition
             try
             {
                 if (arc.SubEntityCount > 0)
@@ -2641,16 +2527,59 @@ namespace GeoTableReports
             }
             catch { }
 
-            // Final fallback: Calculate from arc geometry
-            double x1 = 0, y1 = 0, z1 = 0;
-            alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref z1);
+            // Fallback: If only one tangent exists, intersect it with the arc's tangent on the missing side
+            if (entryTangent != null || exitTangent != null)
+            {
+                double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+                double x3 = 0, y3 = 0, x4 = 0, y4 = 0;
+                
+                if (entryTangent != null)
+                {
+                    alignment.PointLocation(entryTangent.StartStation, 0, 0, ref x1, ref y1, ref tempZ);
+                    alignment.PointLocation(entryTangent.EndStation, 0, 0, ref x2, ref y2, ref tempZ);
+                }
+                else
+                {
+                    // Synthesize entry from arc start direction
+                    double projLen = 1000.0;
+                    alignment.PointLocation(arc.StartStation, 0, 0, ref x2, ref y2, ref tempZ);
+                    double backDir = arc.StartDirection + Math.PI;
+                    x1 = x2 + projLen * Math.Cos(backDir);
+                    y1 = y2 + projLen * Math.Sin(backDir);
+                }
+                
+                if (exitTangent != null)
+                {
+                    alignment.PointLocation(exitTangent.StartStation, 0, 0, ref x3, ref y3, ref tempZ);
+                    alignment.PointLocation(exitTangent.EndStation, 0, 0, ref x4, ref y4, ref tempZ);
+                }
+                else
+                {
+                    // Synthesize exit from arc end direction
+                    double projLen = 1000.0;
+                    alignment.PointLocation(arc.EndStation, 0, 0, ref x3, ref y3, ref tempZ);
+                    x4 = x3 + projLen * Math.Cos(arc.EndDirection);
+                    y4 = y3 + projLen * Math.Sin(arc.EndDirection);
+                }
+                
+                double denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+                if (Math.Abs(denom) > 1e-10)
+                {
+                    xPI = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom;
+                    yPI = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom;
+                    return (xPI, yPI);
+                }
+            }
+
+            // Last resort: Calculate from arc geometry
+            double arcX1 = 0, arcY1 = 0, arcZ1 = 0;
+            alignment.PointLocation(arc.StartStation, 0, 0, ref arcX1, ref arcY1, ref arcZ1);
             double radius = Math.Abs(arc.Radius);
             double delta = arc.Length / radius;
             double tc = CalculateTangentDistance(radius, delta);
-            // Direction is AZIMUTH: dx=sin(θ), dy=cos(θ)
             double backTangentDir = arc.StartDirection + Math.PI;
-            xPI = x1 + tc * Math.Sin(backTangentDir);
-            yPI = y1 + tc * Math.Cos(backTangentDir);
+            xPI = arcX1 + tc * Math.Cos(backTangentDir);
+            yPI = arcY1 + tc * Math.Sin(backTangentDir);
 
             return (xPI, yPI);
         }
@@ -2670,10 +2599,9 @@ namespace GeoTableReports
             double perpDirection = arc.Clockwise ? arc.StartDirection - Math.PI / 2.0 : arc.StartDirection + Math.PI / 2.0;
 
             // Offset by radius from PC to get center
-            // Direction is AZIMUTH: dx=sin(θ), dy=cos(θ)
             double radius = Math.Abs(arc.Radius);
-            centerEasting = x1 + radius * Math.Sin(perpDirection);
-            centerNorthing = y1 + radius * Math.Cos(perpDirection);
+            centerEasting = x1 + radius * Math.Cos(perpDirection);
+            centerNorthing = y1 + radius * Math.Sin(perpDirection);
         }
 
         /// <summary>
@@ -3092,7 +3020,7 @@ namespace GeoTableReports
                                     row = WriteGeoTableSpiralExcel(ws, entity, alignment, i, row);
                                     break;
                                 case AlignmentEntityType.SpiralCurveSpiral:
-                                    row = WriteGeoTableSCSExcel(ws, entity as AlignmentSCS, alignment, i, row, ref curveNumber, reportEntities);
+                                    row = WriteGeoTableSCSExcel(ws, entity as AlignmentSCS, alignment, i, row, ref curveNumber);
                                     break;
                             }
                         }
@@ -3603,7 +3531,7 @@ namespace GeoTableReports
         /// <summary>
         /// Write Spiral-Curve-Spiral entity to GeoTable Excel (GLTT Standard Format)
         /// </summary>
-        private int WriteGeoTableSCSExcel(ExcelWorksheet ws, AlignmentSCS scs, CivDb.Alignment alignment, int index, int row, ref int curveNumber, System.Collections.Generic.List<AlignmentEntity> sortedEntities)
+        private int WriteGeoTableSCSExcel(ExcelWorksheet ws, AlignmentSCS scs, CivDb.Alignment alignment, int index, int row, ref int curveNumber)
         {
             if (scs == null) return row + 6;
 
@@ -3690,82 +3618,11 @@ namespace GeoTableReports
                     ws.Cells[row, 11].Value = "";
                     row++;
 
-                    // Get PI (Point of Intersection) - for SCS, this is the intersection of tangents at TS and ST
-                    // (the "CurvesetPoint" in InRoads terminology)
-                    double piN = 0, piE = 0;
-                    bool gotPI = false;
-                    
-                    // For SCS: Use the tangent directions at TS (entry spiral start) and ST (exit spiral end)
-                    // These are the directions of the tangent lines that define the curveset PI
-                    if (scs.SpiralIn != null && scs.SpiralOut != null)
-                    {
-                        // Get TS point and direction (entry tangent)
-                        double tsE = 0, tsN = 0, tsZ = 0;
-                        alignment.PointLocation(scs.SpiralIn.StartStation, 0, 0, ref tsE, ref tsN, ref tsZ);
-                        double dir1 = scs.SpiralIn.StartDirection;
-
-                        // Get ST point and direction (exit tangent)
-                        double stE = 0, stN = 0, stZ = 0;
-                        alignment.PointLocation(scs.SpiralOut.EndStation, 0, 0, ref stE, ref stN, ref stZ);
-                        double dir2 = scs.SpiralOut.EndDirection;
-
-                        // DEBUG: Show message box with direction values
-                        double dir1Deg = dir1 * 180.0 / Math.PI;
-                        double dir2Deg = dir2 * 180.0 / Math.PI;
-                        string debugMsg = $"=== SCS PI DEBUG (CURVE {curveNumber}) ===\n\n" +
-                            $"TS Point: N {tsN:F4}, E {tsE:F4}\n" +
-                            $"ST Point: N {stN:F4}, E {stE:F4}\n\n" +
-                            $"SpiralIn.StartDirection: {dir1:F6} rad ({dir1Deg:F4}°)\n" +
-                            $"SpiralOut.EndDirection: {dir2:F6} rad ({dir2Deg:F4}°)\n\n" +
-                            $"Bearing at TS: {FormatBearingDMS(dir1)}\n" +
-                            $"Bearing at ST: {FormatBearingDMS(dir2)}\n\n" +
-                            $"Angle difference: {Math.Abs(dir2Deg - dir1Deg):F4}°";
-                        System.Windows.Forms.MessageBox.Show(debugMsg, $"PI Debug - Curve {curveNumber}");
-
-                        // Calculate intersection of the two tangent lines
-                        double dx1 = Math.Cos(dir1);
-                        double dy1 = Math.Sin(dir1);
-                        double dx2 = Math.Cos(dir2);
-                        double dy2 = Math.Sin(dir2);
-
-                        double denom = dx1 * dy2 - dy1 * dx2;
-                        
-                        if (Math.Abs(denom) > 1e-10)
-                        {
-                            double diffX = stE - tsE;
-                            double diffY = stN - tsN;
-                            double t = (diffX * dy2 - diffY * dx2) / denom;
-                            piE = tsE + t * dx1;
-                            piN = tsN + t * dy1;
-                            gotPI = true;
-                            
-                            // DEBUG: Show calculation result
-                            string calcMsg = $"Calculation:\n" +
-                                $"dx1={dx1:F6}, dy1={dy1:F6}\n" +
-                                $"dx2={dx2:F6}, dy2={dy2:F6}\n" +
-                                $"denom: {denom:F10}\n" +
-                                $"diffX={diffX:F4}, diffY={diffY:F4}\n" +
-                                $"t parameter: {t:F4}\n\n" +
-                                $"Calculated PI: N {piN:F4}, E {piE:F4}";
-                            System.Windows.Forms.MessageBox.Show(calcMsg, $"PI Calculation - Curve {curveNumber}");
-                        }
-                        else
-                        {
-                            System.Windows.Forms.MessageBox.Show($"WARNING: denom too small ({denom:F10}), lines nearly parallel!", "PI Warning");
-                        }
-                    }
-                    
-                    // Fallback: Use arc's PIPoint if tangent calculation failed
-                    if (!gotPI)
-                    {
-                        try
-                        {
-                            var piPoint = arc.PIPoint;
-                            piE = piPoint.X;
-                            piN = piPoint.Y;
-                        }
-                        catch { }
-                    }
+                    // Calculate PI (Point of Intersection) - intersection of tangents
+                    // PI is located at tangent distance from SC along incoming tangent direction
+                    double incomingDir = arc.StartDirection;
+                    double piE = x1 + tc * Math.Cos(incomingDir);
+                    double piN = y1 + tc * Math.Sin(incomingDir);
 
                     ws.Cells[row, 3].Value = "PI";
                     ws.Cells[row, 4].Value = "";
@@ -3853,11 +3710,9 @@ namespace GeoTableReports
                         // Set smaller margins to fit content
                         document.SetMargins(20, 20, 20, 20);
 
-                        // Create fonts - use Arial with Unicode encoding to support Greek symbols (θ, Δ)
-                        string arialPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arial.ttf");
-                        string arialBoldPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "arialbd.ttf");
-                        PdfFont font = PdfFontFactory.CreateFont(arialPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
-                        PdfFont boldFont = PdfFontFactory.CreateFont(arialBoldPath, PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+                        // Create fonts - use Arial (Helvetica) with smaller sizes
+                        PdfFont font = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+                        PdfFont boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
 
                         // Title - smaller font
                         string trackName = alignment.Name?.ToUpper() ?? "TRACK GEOMETRY DATA";
@@ -3991,7 +3846,7 @@ namespace GeoTableReports
                                         AddGeoTableSpiralPdf(table, entity, alignment, i, font, prevEntity, nextEntity);
                                         break;
                                     case AlignmentEntityType.SpiralCurveSpiral:
-                                        AddGeoTableSCSPdf(table, entity as AlignmentSCS, alignment, i, ref curveNumber, font, reportEntities);
+                                        AddGeoTableSCSPdf(table, entity as AlignmentSCS, alignment, i, ref curveNumber, font);
                                         break;
                                 }
                             }
@@ -4035,21 +3890,6 @@ namespace GeoTableReports
             catch
             {
                 return double.MaxValue; // push unknowns to end, avoids comparer exceptions
-            }
-        }
-
-        private double SafeEndStation(AlignmentEntity entity)
-        {
-            try
-            {
-                dynamic d = entity;
-                double s = d.EndStation;
-                if (double.IsNaN(s) || double.IsInfinity(s)) return double.MinValue;
-                return s;
-            }
-            catch
-            {
-                return double.MinValue;
             }
         }
 
@@ -4163,12 +4003,11 @@ namespace GeoTableReports
         {
             if (entity == null) yield break;
 
-            // Do NOT expand SCS entities - they need to be processed as compound entities
-            // to correctly calculate PI from the entry and exit tangent directions
             if (TryGetSpiralCurveSpiral(entity, out var scs))
             {
-                // Return the SCS as-is, don't break it apart
-                yield return entity;
+                if (scs.SpiralIn != null) yield return scs.SpiralIn;
+                if (scs.Arc != null) yield return scs.Arc;
+                if (scs.SpiralOut != null) yield return scs.SpiralOut;
                 yield break;
             }
 
@@ -4581,7 +4420,7 @@ namespace GeoTableReports
         /// <summary>
         /// Add Spiral-Curve-Spiral entity to GeoTable PDF (GLTT Standard Format)
         /// </summary>
-        private void AddGeoTableSCSPdf(iText.Layout.Element.Table table, AlignmentSCS scs, CivDb.Alignment alignment, int index, ref int curveNumber, PdfFont font, System.Collections.Generic.List<AlignmentEntity> sortedEntities)
+        private void AddGeoTableSCSPdf(iText.Layout.Element.Table table, AlignmentSCS scs, CivDb.Alignment alignment, int index, ref int curveNumber, PdfFont font)
         {
             if (scs == null) return;
 
@@ -4683,50 +4522,10 @@ namespace GeoTableReports
                         .SetBorderTop(new SolidBorder(ColorConstants.BLACK, 0.5f))
                         .SetBorderRight(new SolidBorder(ColorConstants.BLACK, 0.5f)));
 
-                    // Get PI (Point of Intersection) - for SCS, this is the intersection of tangent directions
-                    // at the TS (spiral start) and ST (spiral end) points
-                    double piN = 0, piE = 0;
-                    bool gotPI = false;
-                    
-                    // Calculate PI using intersection of tangent directions at TS and ST
-                    // Get TS point and direction (entry tangent)
-                    double tsE = 0, tsN = 0, tsZ = 0;
-                    alignment.PointLocation(scs.SpiralIn.StartStation, 0, 0, ref tsE, ref tsN, ref tsZ);
-                    double dir1 = scs.SpiralIn.StartDirection;
-                    
-                    // Get ST point and direction (exit tangent)
-                    double stE = 0, stN = 0, stZ2 = 0;
-                    alignment.PointLocation(scs.SpiralOut.EndStation, 0, 0, ref stE, ref stN, ref stZ2);
-                    double dir2 = scs.SpiralOut.EndDirection;
-                    
-                    // Calculate intersection of the two tangent lines
-                    double dx1 = Math.Cos(dir1);
-                    double dy1 = Math.Sin(dir1);
-                    double dx2 = Math.Cos(dir2);
-                    double dy2 = Math.Sin(dir2);
-                    
-                    double denom = dx1 * dy2 - dy1 * dx2;
-                    if (Math.Abs(denom) > 1e-10)
-                    {
-                        double diffX = stE - tsE;
-                        double diffY = stN - tsN;
-                        double t = (diffX * dy2 - diffY * dx2) / denom;
-                        piE = tsE + t * dx1;
-                        piN = tsN + t * dy1;
-                        gotPI = true;
-                    }
-                    
-                    // Fallback: Use arc's PIPoint if calculation failed
-                    if (!gotPI)
-                    {
-                        try
-                        {
-                            var piPoint = arc.PIPoint;
-                            piE = piPoint.X;
-                            piN = piPoint.Y;
-                        }
-                        catch { }
-                    }
+                    // Row: PI (Point of Intersection) - intersection of tangents
+                    double incomingDir = arc.StartDirection;
+                    double piE = x1 + tc * Math.Cos(incomingDir);
+                    double piN = y1 + tc * Math.Sin(incomingDir);
 
                     table.AddCell(CreateDataCell("PI", font));
                     table.AddCell(CreateDataCell("", font));
@@ -4917,7 +4716,7 @@ namespace GeoTableReports
             var grpAlignment = new GroupBox { Left = 15, Top = groupTop, Width = groupWidth, Height = groupHeight, Text = "Alignment Reports" };
             chkAlignmentPdf = new CheckBox { Left = 15, Top = 25, Width = 160, Text = "Alignment PDF" };
 
-            chkAlignmentXml = new CheckBox { Left = 15, Top = 50, Width = 160, Text = "Alignment XML" };
+            chkAlignmentXml = new CheckBox { Left = 15, Top = 75, Width = 160, Text = "Alignment XML" };
             grpAlignment.Controls.AddRange(new Control[] { chkAlignmentPdf, chkAlignmentXml });
 
             var grpGeoTable = new GroupBox { Left = 355, Top = groupTop, Width = groupWidth, Height = groupHeight, Text = "GeoTable Reports" };
@@ -4935,20 +4734,42 @@ namespace GeoTableReports
             var helpButton = new Button { Left = 490, Top = buttonTop, Width = 110, Text = "Help" };
             helpButton.Click += (s, e) => System.Windows.Forms.MessageBox.Show("Help documentation coming soon.", "Help", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
 
-            // Icon placeholders removed per user request - checkboxes aligned to left
+            // Simple icon placeholders for file types (phase 1: styling)
+            System.Drawing.Color iconBack = System.Drawing.Color.FromArgb(230,230,230);
+            PictureBox IconPdfAlign = new PictureBox { Left = 20, Top = 25, Width = 12, Height = 12, BackColor = iconBack, Parent = grpAlignment }; grpAlignment.Controls.Add(IconPdfAlign);
+
+            PictureBox IconXmlAlign = new PictureBox { Left = 20, Top = 75, Width = 12, Height = 12, BackColor = iconBack, Parent = grpAlignment }; grpAlignment.Controls.Add(IconXmlAlign);
+            chkAlignmentPdf.Left = 40;
+
+            chkAlignmentXml.Left = 40;
+
+            PictureBox IconPdfGeo = new PictureBox { Left = 20, Top = 25, Width = 12, Height = 12, BackColor = iconBack, Parent = grpGeoTable }; grpGeoTable.Controls.Add(IconPdfGeo);
+            PictureBox IconXlsGeo = new PictureBox { Left = 20, Top = 50, Width = 12, Height = 12, BackColor = iconBack, Parent = grpGeoTable }; grpGeoTable.Controls.Add(IconXlsGeo);
+            chkGeoTablePdf.Left = 40;
+            chkGeoTableExcel.Left = 40;
             okButton.Click += (s, e) => { DialogResult = DialogResult.OK; Close(); };
             cancelButton.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
 
             // --- Functional feature controls ---
             // Path status indicator
             lblPathStatus = new System.Windows.Forms.Label { Left = 625, Top = 50, Width = 30, Height = 18, Text = "" };
-            // Live Preview controls removed per user request
+            chkLivePreview = new CheckBox { Left = 490, Top = 15, Width = 150, Text = "Live Preview" };
+            previewBox = new TextBox { Left = 140, Top = 72, Width = 340, Height = 70, ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Visible = false };
+            var btnRefresh = new Button { Left = 485, Top = 70, Width = 75, Height = 26, Text = "Refresh", Visible = false };
+            btnRefresh.Click += (s,e)=> { UpdatePreview(true); };
 
             // Embedded PDF preview panel (right side)
-            // Bulk selection shortcut buttons removed per user request
+            // Bulk selection shortcut buttons inside alignment group
+            btnSelectAll = new Button { Left = 15, Top = 110, Width = 80, Height = 24, Text = "All" };
+            btnSelectNone = new Button { Left = 100, Top = 110, Width = 80, Height = 24, Text = "None" };
+            btnSelectRecommended = new Button { Left = 185, Top = 110, Width = 120, Height = 24, Text = "Recommended" };
+            grpAlignment.Controls.AddRange(new Control[] { btnSelectAll, btnSelectNone, btnSelectRecommended });
+            btnSelectAll.Click += (s,e)=> { SetAllSelections(true); UpdatePreview(); };
+            btnSelectNone.Click += (s,e)=> { SetAllSelections(false); UpdatePreview(); };
+            btnSelectRecommended.Click += (s,e)=> { ApplyRecommended(); UpdatePreview(); };
 
             // Preferences checkboxes (repositioned to avoid button overlap)
-            chkRemember = new CheckBox { Left = 20, Top = 360, Width = 220, Text = "Remember my selections" };
+            chkRemember = new CheckBox { Left = 20, Top = 360, Width = 180, Text = "Remember my selections" };
             chkOpenFolder = new CheckBox { Left = 220, Top = 360, Width = 190, Text = "Open folder after creation" };
             chkOpenFiles = new CheckBox { Left = 425, Top = 360, Width = 200, Text = "Open files after creation" };
 
@@ -4959,13 +4780,18 @@ namespace GeoTableReports
             toolTip.SetToolTip(chkAlignmentXml, "XML alignment data for interoperability");
             toolTip.SetToolTip(chkGeoTablePdf, "GeoTable formatted PDF summary");
             toolTip.SetToolTip(chkGeoTableExcel, "GeoTable Excel for tabular analysis");
+            toolTip.SetToolTip(btnSelectRecommended, "Select recommended outputs for chosen report type");
             toolTip.SetToolTip(outputPathTextBox, "Base path used to build filenames; no extension");
+            toolTip.SetToolTip(chkLivePreview, "Show dynamic list of files to be generated");
+            toolTip.SetToolTip(previewBox, "Live preview of output filenames");
+            // toolTip.SetToolTip(previewBox, "Preview of filenames that will be generated"); // removed from UI
             toolTip.SetToolTip(chkRemember, "Persist these selections for next session");
             toolTip.SetToolTip(chkOpenFolder, "Open containing folder after successful generation");
             toolTip.SetToolTip(chkOpenFiles, "Open each generated file automatically");
 
             // Events for dynamic preview and validation
             reportTypeComboBox.SelectedIndexChanged += (s,e)=> { ReportType = reportTypeComboBox.SelectedItem?.ToString() ?? "Horizontal"; UpdatePreview(); };
+            chkLivePreview.CheckedChanged += (s,e)=> { previewBox.Visible = chkLivePreview.Checked; btnRefresh.Visible = chkLivePreview.Checked; UpdatePreview(true); };
             outputPathTextBox.TextChanged += (s,e)=> { ValidatePath(); UpdatePreview(); };
             chkAlignmentPdf.CheckedChanged += (s,e)=> { ValidatePath(); UpdatePreview(); };
 
@@ -4974,7 +4800,7 @@ namespace GeoTableReports
 
             Controls.AddRange(new Control[] {
                 lblType, reportTypeComboBox,
-                lblOutput, outputPathTextBox, browseButton, lblPathStatus,
+                lblOutput, outputPathTextBox, browseButton, lblPathStatus, chkLivePreview, previewBox, btnRefresh,
                 grpAlignment, grpGeoTable,
                 chkRemember, chkOpenFolder, chkOpenFiles,
                 okButton, cancelButton, helpButton
@@ -5026,8 +4852,37 @@ namespace GeoTableReports
             if (chkAlignmentXml.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_Alignment_Report.xml"));
             if (chkGeoTablePdf.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_GeoTable.pdf"));
             if (chkGeoTableExcel.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_GeoTable.xlsx"));
-            // Preview box removed - just update OK button state
+            if (previewBox.Visible)
+            {
+                if (list.Count == 0)
+                {
+                    previewBox.Text = "(No outputs selected)";
+                }
+                else
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine($"Alignment: {previewData.AlignmentName}");
+                    sb.AppendLine($"Span: {FormatStationLocal(previewData.StartStation)} - {FormatStationLocal(previewData.EndStation)}");
+                    sb.AppendLine($"Elements: Lines={previewData.LineCount} Arcs={previewData.ArcCount} Spirals={previewData.SpiralCount}");
+                    if (!string.IsNullOrEmpty(previewData.ProfileName) && ReportType == "Vertical") sb.AppendLine($"Profile: {previewData.ProfileName}");
+                    sb.AppendLine();
+                    // For each selected format, append a snippet header + sample lines
+                    System.Collections.Generic.List<string> sample = ReportType == "Vertical" ? previewData.VerticalSampleLines : previewData.HorizontalSampleLines;
+                    int maxLinesPerFormat = 8;
+                    if (chkAlignmentPdf.Checked) AppendFormatSnippet(sb, "Alignment PDF", sample, maxLinesPerFormat);
+
+                    if (chkAlignmentXml.Checked) AppendFormatSnippet(sb, "Alignment XML", sample, maxLinesPerFormat);
+                    if (chkGeoTablePdf.Checked) AppendFormatSnippet(sb, "GeoTable PDF", sample, maxLinesPerFormat);
+                    if (chkGeoTableExcel.Checked) AppendFormatSnippet(sb, "GeoTable Excel", sample, maxLinesPerFormat);
+                    previewBox.Text = sb.ToString();
+                }
+            }
             okButton.Enabled = lblPathStatus.Text == "✔" && list.Count > 0;
+            // Trigger PDF side preview regeneration if needed
+            // (PDF preview hook removed)
+            {
+                // (PDF preview generation removed)
+            }
         }
 
         private void AppendFormatSnippet(System.Text.StringBuilder sb, string title, System.Collections.Generic.List<string> source, int limit)
