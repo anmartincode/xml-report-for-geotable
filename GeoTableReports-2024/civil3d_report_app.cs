@@ -34,7 +34,7 @@ using OfficeOpenXml;
 using OfficeOpenXml.Style;
 // (Viewer components removed)
 
-[assembly: CommandClass(typeof(GeoTableReports.ReportCommands2025))]
+[assembly: CommandClass(typeof(GeoTableReports.ReportCommands2024))]
 
 namespace GeoTableReports
 {
@@ -43,7 +43,7 @@ namespace GeoTableReports
         void GenerateReport();
     }
 
-    public class ReportCommands2025 : IExtensionApplication, IReportGenerator
+    public class ReportCommands2024 : IExtensionApplication, IReportGenerator
     {
         // Centralized label helper for InRoads-style reporting
         private static class InRoadsLabels
@@ -92,9 +92,9 @@ namespace GeoTableReports
                     return;
                 }
 
-                AlignmentPreviewData2025 previewData = BuildAlignmentPreviewData(alignmentId);
+                AlignmentPreviewData2024 previewData = BuildAlignmentPreviewData(alignmentId);
 
-                using (var dialog = new ReportSelectionForm2025(previewData))
+                using (var dialog = new ReportSelectionForm2024(previewData))
                 {
                     if (dialog.ShowDialog() != DialogResult.OK)
                         return;
@@ -126,10 +126,10 @@ namespace GeoTableReports
 
                         var generatedFiles = new System.Collections.Generic.List<string>();
                         int totalSteps = (generateAlignmentPDF ? 1 : 0) + (generateAlignmentXML ? 1 : 0) + (generateGeoTablePDF ? 1 : 0) + (generateGeoTableEXCEL ? 1 : 0);
-                        ProgressStatusWindow2025 progressWindow = null;
+                        ProgressStatusWindow2024 progressWindow = null;
                         if (totalSteps > 0)
                         {
-                            progressWindow = new ProgressStatusWindow2025(totalSteps);
+                            progressWindow = new ProgressStatusWindow2024(totalSteps);
                             progressWindow.Show();
                             System.Windows.Forms.Application.DoEvents();
                         }
@@ -189,7 +189,7 @@ namespace GeoTableReports
             bool generateAlignmentXML,
             bool generateGeoTablePDF,
             bool generateGeoTableEXCEL,
-            ProgressStatusWindow2025 progressWindow,
+            ProgressStatusWindow2024 progressWindow,
             System.Collections.Generic.List<string> generatedFiles)
         {
             if (generateAlignmentPDF)
@@ -234,9 +234,9 @@ namespace GeoTableReports
         }
 
         // Build preview data for dialog (metadata + sample lines for both horizontal & vertical)
-        private AlignmentPreviewData2025 BuildAlignmentPreviewData(ObjectId alignmentId)
+        private AlignmentPreviewData2024 BuildAlignmentPreviewData(ObjectId alignmentId)
         {
-            var data = new AlignmentPreviewData2025();
+            var data = new AlignmentPreviewData2024();
             try
             {
                 AcApp.Document doc = AcApp.Application.DocumentManager.MdiActiveDocument;
@@ -256,7 +256,7 @@ namespace GeoTableReports
             return data;
         }
 
-        private void PopulateAlignmentMetadata(CivDb.Alignment alignment, AlignmentPreviewData2025 data)
+        private void PopulateAlignmentMetadata(CivDb.Alignment alignment, AlignmentPreviewData2024 data)
         {
             data.AlignmentName = alignment.Name ?? "(Unnamed)";
             try { data.Description = alignment.Description ?? ""; } catch { }
@@ -278,7 +278,7 @@ namespace GeoTableReports
             data.EndStation = endSta;
         }
 
-        private void PopulateHorizontalSamples(CivDb.Alignment alignment, AlignmentPreviewData2025 data)
+        private void PopulateHorizontalSamples(CivDb.Alignment alignment, AlignmentPreviewData2024 data)
         {
             int lines = 0, arcs = 0, spirals = 0;
             for (int i = 0; i < alignment.Entities.Count; i++)
@@ -320,7 +320,7 @@ namespace GeoTableReports
             data.SpiralCount = spirals;
         }
 
-        private void AddHorizontalSampleLine(CivDb.Alignment alignment, AlignmentEntity e, int index, AlignmentPreviewData2025 data)
+        private void AddHorizontalSampleLine(CivDb.Alignment alignment, AlignmentEntity e, int index, AlignmentPreviewData2024 data)
         {
             switch (e.EntityType)
             {
@@ -361,7 +361,7 @@ namespace GeoTableReports
             }
         }
 
-        private void PopulateVerticalSamples(CivDb.Alignment alignment, AlignmentPreviewData2025 data)
+        private void PopulateVerticalSamples(CivDb.Alignment alignment, AlignmentPreviewData2024 data)
         {
             try
             {
@@ -384,7 +384,7 @@ namespace GeoTableReports
             catch { }
         }
 
-        private void AddVerticalSampleLine(ProfileEntity pe, AlignmentPreviewData2025 data)
+        private void AddVerticalSampleLine(ProfileEntity pe, AlignmentPreviewData2024 data)
         {
             if (pe.EntityType == ProfileEntityType.Tangent && pe is ProfileTangent t)
             {
@@ -4184,7 +4184,7 @@ namespace GeoTableReports
                 .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                 .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                 .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f));
-            curveNoCell.SetNextRenderer(new OvalCellRenderer2025(curveNoCell));
+            curveNoCell.SetNextRenderer(new OvalCellRenderer2024(curveNoCell));
             table.AddCell(curveNoCell);
 
             table.AddCell(CreateLabelCell(startLabel, font));
@@ -4536,7 +4536,7 @@ namespace GeoTableReports
                         .SetTextAlignment(iText.Layout.Properties.TextAlignment.CENTER)
                         .SetVerticalAlignment(iText.Layout.Properties.VerticalAlignment.MIDDLE)
                         .SetBorder(new SolidBorder(ColorConstants.BLACK, 0.5f));
-                    curveNoCell.SetNextRenderer(new OvalCellRenderer2025(curveNoCell));
+                    curveNoCell.SetNextRenderer(new OvalCellRenderer2024(curveNoCell));
                     table.AddCell(curveNoCell);
 
                     table.AddCell(CreateDataCell("SC", font));
@@ -4645,7 +4645,7 @@ namespace GeoTableReports
 
     // Dedicated 2025 report selection dialog to avoid cross-version ambiguity
     // Preview DTO for snippet-based live preview
-    public class AlignmentPreviewData2025
+    public class AlignmentPreviewData2024
     {
         public string AlignmentName = string.Empty;
         public string Description = string.Empty;
@@ -4660,9 +4660,9 @@ namespace GeoTableReports
         public System.Collections.Generic.List<string> VerticalSampleLines = new System.Collections.Generic.List<string>();
     }
 
-    public class ReportSelectionForm2025 : Form
+    public class ReportSelectionForm2024 : Form
     {
-        private AlignmentPreviewData2025 previewData; // injected preview metadata & sample lines
+        private AlignmentPreviewData2024 previewData; // injected preview metadata & sample lines
         // (Viewer fields removed)
         private ComboBox reportTypeComboBox;
         private TextBox outputPathTextBox;
@@ -4692,9 +4692,9 @@ namespace GeoTableReports
         public bool OpenFolderAfter => chkOpenFolder?.Checked == true;
         public bool OpenFilesAfter => chkOpenFiles?.Checked == true;
 
-        public ReportSelectionForm2025(AlignmentPreviewData2025 preview)
+        public ReportSelectionForm2024(AlignmentPreviewData2024 preview)
         {
-            previewData = preview ?? new AlignmentPreviewData2025();
+            previewData = preview ?? new AlignmentPreviewData2024();
             Text = "GeoTable Report Selection";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -5026,7 +5026,7 @@ namespace GeoTableReports
     }
 
     // Progress Status Window for real-time feedback during report generation
-    public class ProgressStatusWindow2025 : Form
+    public class ProgressStatusWindow2024 : Form
     {
         private ProgressBar progressBar;
         private System.Windows.Forms.Label lblStatus;
@@ -5034,7 +5034,7 @@ namespace GeoTableReports
         private int totalSteps;
         private int currentStep;
 
-        public ProgressStatusWindow2025(int steps)
+        public ProgressStatusWindow2024(int steps)
         {
             totalSteps = steps;
             currentStep = 0;
@@ -5137,9 +5137,9 @@ namespace GeoTableReports
     }
 
     // Custom renderer to draw an oval around cell content
-    public class OvalCellRenderer2025 : CellRenderer
+    public class OvalCellRenderer2024 : CellRenderer
     {
-        public OvalCellRenderer2025(iText.Layout.Element.Cell modelElement) : base(modelElement)
+        public OvalCellRenderer2024(iText.Layout.Element.Cell modelElement) : base(modelElement)
         {
         }
 
@@ -5199,7 +5199,7 @@ namespace GeoTableReports
         
         public override IRenderer GetNextRenderer()
         {
-            return new OvalCellRenderer2025((iText.Layout.Element.Cell)GetModelElement());
+            return new OvalCellRenderer2024((iText.Layout.Element.Cell)GetModelElement());
         }
     }
 
