@@ -2410,13 +2410,14 @@ namespace GeoTableReports
             double xPI = 0, yPI = 0;
             double tempZ = 0;
 
-            // First, find adjacent tangent LINE entities (looking past spirals)
+            // First, find adjacent tangent LINE entities (looking past spirals only)
+            // InRoads PI: intersection of the tangent LINEs immediately adjacent to this curve's SCS
             AlignmentLine entryTangent = null;
             AlignmentLine exitTangent = null;
             
             if (sortedEntities != null && arcIndex >= 0 && arcIndex < sortedEntities.Count)
             {
-                // Find entry tangent
+                // Find entry tangent - skip spirals only (for SCS transitions)
                 for (int i = arcIndex - 1; i >= 0; i--)
                 {
                     var entity = sortedEntities[i];
@@ -2425,12 +2426,14 @@ namespace GeoTableReports
                         entryTangent = entity as AlignmentLine;
                         break;
                     }
+                    // Only continue past spirals (to find tangent outside SCS)
                     if (entity.EntityType == AlignmentEntityType.Spiral)
                         continue;
+                    // Stop at arcs or anything else - we don't skip across other curves
                     break;
                 }
 
-                // Find exit tangent
+                // Find exit tangent - skip spirals only (for SCS transitions)
                 for (int i = arcIndex + 1; i < sortedEntities.Count; i++)
                 {
                     var entity = sortedEntities[i];
@@ -2439,8 +2442,10 @@ namespace GeoTableReports
                         exitTangent = entity as AlignmentLine;
                         break;
                     }
+                    // Only continue past spirals (to find tangent outside SCS)
                     if (entity.EntityType == AlignmentEntityType.Spiral)
                         continue;
+                    // Stop at arcs or anything else - we don't skip across other curves
                     break;
                 }
             }
@@ -2451,7 +2456,7 @@ namespace GeoTableReports
                 double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
                 double x3 = 0, y3 = 0, x4 = 0, y4 = 0;
                 
-                // Get entry tangent coordinates
+                // Get entry tangent coordinates from sub-entity or station-based
                 bool gotEntry = false;
                 try
                 {
@@ -2475,7 +2480,7 @@ namespace GeoTableReports
                     alignment.PointLocation(entryTangent.EndStation, 0, 0, ref x2, ref y2, ref tempZ);
                 }
                 
-                // Get exit tangent coordinates
+                // Get exit tangent coordinates from sub-entity or station-based
                 bool gotExit = false;
                 try
                 {
@@ -2499,35 +2504,26 @@ namespace GeoTableReports
                     alignment.PointLocation(exitTangent.EndStation, 0, 0, ref x4, ref y4, ref tempZ);
                 }
 
-                // 4-point line intersection formula
-                double denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+                // Numerically stable line intersection using parametric form
+                double dx1 = x2 - x1;
+                double dy1 = y2 - y1;
+                double dx2 = x4 - x3;
+                double dy2 = y4 - y3;
+                double dx3 = x3 - x1;
+                double dy3 = y3 - y1;
+                
+                double denom = dx1 * dy2 - dy1 * dx2;
                 if (Math.Abs(denom) > 1e-10)
                 {
-                    xPI = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom;
-                    yPI = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom;
+                    double t = (dx3 * dy2 - dy3 * dx2) / denom;
+                    xPI = x1 + t * dx1;
+                    yPI = y1 + t * dy1;
                     return (xPI, yPI);
                 }
             }
 
-            // For boundary curves (missing entry or exit tangent), prefer stored PI from sub-entity
-            // This matches InRoads behavior where PI is stored as part of the curve definition
-            try
-            {
-                if (arc.SubEntityCount > 0)
-                {
-                    var subEntity = arc[0];
-                    if (subEntity is AlignmentSubEntityArc subEntityArc)
-                    {
-                        var piPoint = subEntityArc.PIPoint;
-                        xPI = piPoint.X;
-                        yPI = piPoint.Y;
-                        return (xPI, yPI);
-                    }
-                }
-            }
-            catch { }
-
-            // Fallback: If only one tangent exists, intersect it with the arc's tangent on the missing side
+            // If we have at least one tangent, compute PI by intersecting it with the arc's tangent direction
+            // This takes priority over stored sub-entity PI to match InRoads v11 calculation
             if (entryTangent != null || exitTangent != null)
             {
                 double x1 = 0, y1 = 0, x2 = 0, y2 = 0;
@@ -2535,43 +2531,99 @@ namespace GeoTableReports
                 
                 if (entryTangent != null)
                 {
+                    // Use entry tangent coordinates
                     alignment.PointLocation(entryTangent.StartStation, 0, 0, ref x1, ref y1, ref tempZ);
                     alignment.PointLocation(entryTangent.EndStation, 0, 0, ref x2, ref y2, ref tempZ);
-                }
-                else
-                {
-                    // Synthesize entry from arc start direction
-                    double projLen = 1000.0;
-                    alignment.PointLocation(arc.StartStation, 0, 0, ref x2, ref y2, ref tempZ);
-                    double backDir = arc.StartDirection + Math.PI;
-                    x1 = x2 + projLen * Math.Cos(backDir);
-                    y1 = y2 + projLen * Math.Sin(backDir);
+                    
+                    if (exitTangent == null)
+                    {
+                        // Synthesize exit from arc end direction (extended forward)
+                        double projLen = 1000.0;
+                        alignment.PointLocation(arc.EndStation, 0, 0, ref x3, ref y3, ref tempZ);
+                        x4 = x3 + projLen * Math.Cos(arc.EndDirection);
+                        y4 = y3 + projLen * Math.Sin(arc.EndDirection);
+                    }
                 }
                 
                 if (exitTangent != null)
                 {
+                    // Use exit tangent coordinates
                     alignment.PointLocation(exitTangent.StartStation, 0, 0, ref x3, ref y3, ref tempZ);
                     alignment.PointLocation(exitTangent.EndStation, 0, 0, ref x4, ref y4, ref tempZ);
-                }
-                else
-                {
-                    // Synthesize exit from arc end direction
-                    double projLen = 1000.0;
-                    alignment.PointLocation(arc.EndStation, 0, 0, ref x3, ref y3, ref tempZ);
-                    x4 = x3 + projLen * Math.Cos(arc.EndDirection);
-                    y4 = y3 + projLen * Math.Sin(arc.EndDirection);
+                    
+                    if (entryTangent == null)
+                    {
+                        // No entry tangent LINE exists (first curve in alignment)
+                        // Use arc.StartDirection as the entry tangent direction at PC
+                        // This is more reliable than computing from exit tangent - delta
+                        double projLen = 10000.0;
+                        alignment.PointLocation(arc.StartStation, 0, 0, ref x1, ref y1, ref tempZ);
+                        
+                        // Entry tangent goes forward from a point behind PC
+                        // Arc.StartDirection is the direction of travel at PC (forward along entry tangent)
+                        x2 = x1 + projLen * Math.Cos(arc.StartDirection);
+                        y2 = y1 + projLen * Math.Sin(arc.StartDirection);
+                    }
                 }
                 
-                double denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+                // Numerically stable parametric intersection
+                double dx1 = x2 - x1;
+                double dy1 = y2 - y1;
+                double dx2 = x4 - x3;
+                double dy2 = y4 - y3;
+                double dx3 = x3 - x1;
+                double dy3 = y3 - y1;
+                
+                double denom = dx1 * dy2 - dy1 * dx2;
                 if (Math.Abs(denom) > 1e-10)
                 {
-                    xPI = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom;
-                    yPI = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom;
+                    double t = (dx3 * dy2 - dy3 * dx2) / denom;
+                    xPI = x1 + t * dx1;
+                    yPI = y1 + t * dy1;
                     return (xPI, yPI);
                 }
             }
 
-            // Last resort: Calculate from arc geometry
+            // Last resort: Calculate from arc geometry using PC/PT tangent directions
+            {
+                double pcX = 0, pcY = 0;
+                double ptX = 0, ptY = 0;
+                alignment.PointLocation(arc.StartStation, 0, 0, ref pcX, ref pcY, ref tempZ);
+                alignment.PointLocation(arc.EndStation, 0, 0, ref ptX, ref ptY, ref tempZ);
+                
+                // Entry tangent: line through PC with back-tangent direction
+                double backDir = arc.StartDirection + Math.PI;
+                double projLen = 1000.0;
+                double x1 = pcX + projLen * Math.Cos(backDir);
+                double y1 = pcY + projLen * Math.Sin(backDir);
+                double x2 = pcX;
+                double y2 = pcY;
+                
+                // Exit tangent: line through PT with forward-tangent direction
+                double x3 = ptX;
+                double y3 = ptY;
+                double x4 = ptX + projLen * Math.Cos(arc.EndDirection);
+                double y4 = ptY + projLen * Math.Sin(arc.EndDirection);
+                
+                // Numerically stable parametric intersection
+                double dx1 = x2 - x1;
+                double dy1 = y2 - y1;
+                double dx2 = x4 - x3;
+                double dy2 = y4 - y3;
+                double dx3 = x3 - x1;
+                double dy3 = y3 - y1;
+                
+                double denom = dx1 * dy2 - dy1 * dx2;
+                if (Math.Abs(denom) > 1e-10)
+                {
+                    double t = (dx3 * dy2 - dy3 * dx2) / denom;
+                    xPI = x1 + t * dx1;
+                    yPI = y1 + t * dy1;
+                    return (xPI, yPI);
+                }
+            }
+
+            // Final fallback: simple tangent distance calculation
             double arcX1 = 0, arcY1 = 0, arcZ1 = 0;
             alignment.PointLocation(arc.StartStation, 0, 0, ref arcX1, ref arcY1, ref arcZ1);
             double radius = Math.Abs(arc.Radius);
@@ -3214,29 +3266,32 @@ namespace GeoTableReports
                     CalculateCurveCenter(arc, alignment, out centerN, out centerE);
                 }
 
-                // Row 1: PC (Start of Curve per InRoads)
+                // Row 1: PC (Start of Curve per InRoads) - no bearing per PDF format
                 ws.Cells[row, 1].Value = "CURVE";
                 ws.Cells[row, 2].Value = $"{curveNumber}-{directionStr}";
                 ws.Cells[row, 3].Value = "PC";
                 ws.Cells[row, 4].Value = FormatStation(arc.StartStation);
-                ws.Cells[row, 5].Value = FormatBearingDMS(arc.StartDirection);
+                ws.Cells[row, 5].Value = ""; // No bearing for PC per PDF format
                 ws.Cells[row, 6].Value = y1;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
                 ws.Cells[row, 7].Value = x1;
                 ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
 
                 // DATA for row 1 - individual cells
+                // Calculate Degree of Curvature (Arc Definition): Da = 100 / R (radians for formatter)
+                double degreeOfCurveRad = (radius > 0) ? (100.0 / radius) : 0;
+                
                 ws.Cells[row, 8].Value = $"Δc = {FormatAngleDMS(delta)}";
                 ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 8].Style.Fill.PatternType = ExcelFillStyle.Solid;
                 ws.Cells[row, 8].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
 
-                ws.Cells[row, 9].Value = $"Da= {FormatAngleDMS(delta / 2.0)}";
+                ws.Cells[row, 9].Value = $"Da= {FormatAngleDMS(degreeOfCurveRad)}";
                 ws.Cells[row, 9].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 9].Style.Fill.PatternType = ExcelFillStyle.Solid;
                 ws.Cells[row, 9].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
 
-                ws.Cells[row, 10].Value = $"R= {FormatRadius(radius)}";
+                ws.Cells[row, 10].Value = $"R= {radius:F2}";
                 ws.Cells[row, 10].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 10].Style.Fill.PatternType = ExcelFillStyle.Solid;
                 ws.Cells[row, 10].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
@@ -3288,26 +3343,23 @@ namespace GeoTableReports
                 ws.Cells[row, 7].Value = x2;
                 ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
 
-                // DATA for row 3 - individual cells
-                ws.Cells[row, 8].Value = $"Tc= {FormatDistanceFeet(tc)}";
+                // DATA for row 3 - individual cells (matching PDF format)
+                ws.Cells[row, 8].Value = $"Tc= {tc:F2}'";
                 ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 8].Style.Fill.PatternType = ExcelFillStyle.Solid;
                 ws.Cells[row, 8].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
 
-                ws.Cells[row, 9].Value = $"Ec= {FormatDistanceFeet(ec)}";
+                ws.Cells[row, 9].Value = $"Ec= {ec:F2}'";
                 ws.Cells[row, 9].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 9].Style.Fill.PatternType = ExcelFillStyle.Solid;
                 ws.Cells[row, 9].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
 
-                ws.Cells[row, 10].Value = $"CC:N {centerN:F4}";
+                // Merge columns 10-11 for CC coordinates (matching PDF format)
+                ws.Cells[row, 10, row, 11].Merge = true;
+                ws.Cells[row, 10].Value = $"CC:N {centerN:F4}  E {centerE:F4}";
                 ws.Cells[row, 10].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 10].Style.Fill.PatternType = ExcelFillStyle.Solid;
                 ws.Cells[row, 10].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
-
-                ws.Cells[row, 11].Value = $"E {centerE:F4}";
-                ws.Cells[row, 11].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-                ws.Cells[row, 11].Style.Fill.PatternType = ExcelFillStyle.Solid;
-                ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
                 // Merge ELEMENT and CURVE No. columns for all 3 rows
@@ -3365,7 +3417,6 @@ namespace GeoTableReports
                     // startDirection: approximate using chord around start (computed later if needed)
                 }
 
-                bool gotFromSubEntity = false;
                 try
                 {
                     dynamic dse = spiral ?? (dynamic)spiralEntity;
@@ -3395,8 +3446,6 @@ namespace GeoTableReports
                                 if (shortTangentProp != null) shortTangent_API = (double)shortTangentProp.GetValue(subEntitySpiral);
                             }
                             catch { }
-
-                            gotFromSubEntity = true;
                         }
                     }
                 }
@@ -3411,15 +3460,6 @@ namespace GeoTableReports
                 bool isEntry = double.IsInfinity(radiusIn) || radiusIn == 0 || radiusIn > radiusOut;
                 string startLabel = isEntry ? "TS" : "CS";
                 string endLabel = isEntry ? "SC" : "ST";
-                
-                // Calculate tangent direction at end for ST bearing (exit spiral to tangent)
-                double tangentDirEnd = 0;
-                if (endLabel == "ST")
-                {
-                    double x3 = 0, y3 = 0, z3 = 0;
-                    alignment.PointLocation(endStation + 0.01, 0, 0, ref x3, ref y3, ref z3);
-                    tangentDirEnd = Math.Atan2(y3 - y2, x3 - x2);
-                }
 
                 // Calculate spiral parameters
                 double spiralLength = length;
@@ -3431,24 +3471,18 @@ namespace GeoTableReports
                 double p = ys;  // Simplified
                 double k = spiralLength / 2.0;  // Simplified
 
-                // Row 1: TS (entry) or CS (exit) start point
-                ws.Cells[row, 1].Value = gotFromSubEntity ? "SPIRAL (SubEntity)" : "SPIRAL";
+                // Row 1: TS (entry) or CS (exit) start point - no bearing per PDF format
+                ws.Cells[row, 1].Value = "SPIRAL";
                 ws.Cells[row, 3].Value = startLabel; // Dynamic: TS or CS
                 ws.Cells[row, 4].Value = FormatStation(startStation);
-                // If startDirection wasn't available, compute from local tangent
-                if (Math.Abs(startDirection) < 1e-6)
-                {
-                    double x0 = 0, y0 = 0, z0 = 0; alignment.PointLocation(startStation - 0.01, 0, 0, ref x0, ref y0, ref z0);
-                    startDirection = Math.Atan2(y1 - y0, x1 - x0);
-                }
-                ws.Cells[row, 5].Value = FormatBearingDMS(startDirection);
+                ws.Cells[row, 5].Value = ""; // No bearing for spiral start per PDF format
                 ws.Cells[row, 6].Value = y1;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
                 ws.Cells[row, 7].Value = x1;
                 ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
 
                 // DATA for row 1 - individual cells
-                ws.Cells[row, 8].Value = $"θs = {FormatAngleDMS(theta)}";
+                ws.Cells[row, 8].Value = $"δs = {FormatAngleDMS(theta)}";
                 ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 8].Style.Fill.PatternType = ExcelFillStyle.Solid;
                 ws.Cells[row, 8].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
@@ -3469,11 +3503,10 @@ namespace GeoTableReports
                 ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 2: End point (ST for exit spiral has bearing, SC for entry spiral is empty)
+                // Row 2: End point (SC or ST) - no bearing per PDF format
                 ws.Cells[row, 3].Value = endLabel; // Dynamic: ST or SC
                 ws.Cells[row, 4].Value = FormatStation(endStation);
-                // ST (exit spiral end) shows bearing, SC (entry spiral end) is empty
-                ws.Cells[row, 5].Value = (endLabel == "ST") ? FormatBearingDMS(tangentDirEnd) : "";
+                ws.Cells[row, 5].Value = ""; // No bearing for spiral end per PDF format
                 ws.Cells[row, 5].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 6].Value = y2;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
@@ -4325,7 +4358,7 @@ namespace GeoTableReports
                 dataTable.SetFixedLayout();
                 
                 // Row 1 Data
-                dataTable.AddCell(CreateDataCellNoBorder($"θs = {FormatAngleDMS(thetaS_rad)}", font));
+                dataTable.AddCell(CreateDataCellNoBorder($"δs = {FormatAngleDMS(thetaS_rad)}", font));
                 dataTable.AddCell(CreateDataCellNoBorder($"Ls= {length:F2}'", font));
                 dataTable.AddCell(CreateDataCellNoBorder($"LT= {LT:F2}'", font));
                 dataTable.AddCell(CreateDataCellNoBorder($"STs= {ST:F2}'", font));
@@ -4641,15 +4674,9 @@ namespace GeoTableReports
         private CheckBox chkGeoTableExcel;
         private Button okButton;
         private Button cancelButton;
-        // Functional enhancement controls placeholders (phase 2)
-        private Button btnSelectAll;
-        private Button btnSelectNone;
-        private Button btnSelectRecommended;
         private CheckBox chkRemember;
         private CheckBox chkOpenFolder;
         private CheckBox chkOpenFiles;
-        private CheckBox chkLivePreview;
-        private TextBox previewBox;
         private System.Windows.Forms.Label lblPathStatus;
         private ToolTip toolTip;
         private string settingsFilePath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GeoTableReports", "dialog_prefs.json");
@@ -4715,8 +4742,7 @@ namespace GeoTableReports
             int groupWidth = 320;
             var grpAlignment = new GroupBox { Left = 15, Top = groupTop, Width = groupWidth, Height = groupHeight, Text = "Alignment Reports" };
             chkAlignmentPdf = new CheckBox { Left = 15, Top = 25, Width = 160, Text = "Alignment PDF" };
-
-            chkAlignmentXml = new CheckBox { Left = 15, Top = 75, Width = 160, Text = "Alignment XML" };
+            chkAlignmentXml = new CheckBox { Left = 15, Top = 50, Width = 160, Text = "Alignment XML" };
             grpAlignment.Controls.AddRange(new Control[] { chkAlignmentPdf, chkAlignmentXml });
 
             var grpGeoTable = new GroupBox { Left = 355, Top = groupTop, Width = groupWidth, Height = groupHeight, Text = "GeoTable Reports" };
@@ -4734,39 +4760,15 @@ namespace GeoTableReports
             var helpButton = new Button { Left = 490, Top = buttonTop, Width = 110, Text = "Help" };
             helpButton.Click += (s, e) => System.Windows.Forms.MessageBox.Show("Help documentation coming soon.", "Help", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
 
-            // Simple icon placeholders for file types (phase 1: styling)
-            System.Drawing.Color iconBack = System.Drawing.Color.FromArgb(230,230,230);
-            PictureBox IconPdfAlign = new PictureBox { Left = 20, Top = 25, Width = 12, Height = 12, BackColor = iconBack, Parent = grpAlignment }; grpAlignment.Controls.Add(IconPdfAlign);
 
-            PictureBox IconXmlAlign = new PictureBox { Left = 20, Top = 75, Width = 12, Height = 12, BackColor = iconBack, Parent = grpAlignment }; grpAlignment.Controls.Add(IconXmlAlign);
-            chkAlignmentPdf.Left = 40;
-
-            chkAlignmentXml.Left = 40;
-
-            PictureBox IconPdfGeo = new PictureBox { Left = 20, Top = 25, Width = 12, Height = 12, BackColor = iconBack, Parent = grpGeoTable }; grpGeoTable.Controls.Add(IconPdfGeo);
-            PictureBox IconXlsGeo = new PictureBox { Left = 20, Top = 50, Width = 12, Height = 12, BackColor = iconBack, Parent = grpGeoTable }; grpGeoTable.Controls.Add(IconXlsGeo);
-            chkGeoTablePdf.Left = 40;
-            chkGeoTableExcel.Left = 40;
             okButton.Click += (s, e) => { DialogResult = DialogResult.OK; Close(); };
             cancelButton.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
 
             // --- Functional feature controls ---
             // Path status indicator
             lblPathStatus = new System.Windows.Forms.Label { Left = 625, Top = 50, Width = 30, Height = 18, Text = "" };
-            chkLivePreview = new CheckBox { Left = 490, Top = 15, Width = 150, Text = "Live Preview" };
-            previewBox = new TextBox { Left = 140, Top = 72, Width = 340, Height = 70, ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Visible = false };
-            var btnRefresh = new Button { Left = 485, Top = 70, Width = 75, Height = 26, Text = "Refresh", Visible = false };
-            btnRefresh.Click += (s,e)=> { UpdatePreview(true); };
 
-            // Embedded PDF preview panel (right side)
-            // Bulk selection shortcut buttons inside alignment group
-            btnSelectAll = new Button { Left = 15, Top = 110, Width = 80, Height = 24, Text = "All" };
-            btnSelectNone = new Button { Left = 100, Top = 110, Width = 80, Height = 24, Text = "None" };
-            btnSelectRecommended = new Button { Left = 185, Top = 110, Width = 120, Height = 24, Text = "Recommended" };
-            grpAlignment.Controls.AddRange(new Control[] { btnSelectAll, btnSelectNone, btnSelectRecommended });
-            btnSelectAll.Click += (s,e)=> { SetAllSelections(true); UpdatePreview(); };
-            btnSelectNone.Click += (s,e)=> { SetAllSelections(false); UpdatePreview(); };
-            btnSelectRecommended.Click += (s,e)=> { ApplyRecommended(); UpdatePreview(); };
+
 
             // Preferences checkboxes (repositioned to avoid button overlap)
             chkRemember = new CheckBox { Left = 20, Top = 360, Width = 180, Text = "Remember my selections" };
@@ -4780,10 +4782,7 @@ namespace GeoTableReports
             toolTip.SetToolTip(chkAlignmentXml, "XML alignment data for interoperability");
             toolTip.SetToolTip(chkGeoTablePdf, "GeoTable formatted PDF summary");
             toolTip.SetToolTip(chkGeoTableExcel, "GeoTable Excel for tabular analysis");
-            toolTip.SetToolTip(btnSelectRecommended, "Select recommended outputs for chosen report type");
             toolTip.SetToolTip(outputPathTextBox, "Base path used to build filenames; no extension");
-            toolTip.SetToolTip(chkLivePreview, "Show dynamic list of files to be generated");
-            toolTip.SetToolTip(previewBox, "Live preview of output filenames");
             // toolTip.SetToolTip(previewBox, "Preview of filenames that will be generated"); // removed from UI
             toolTip.SetToolTip(chkRemember, "Persist these selections for next session");
             toolTip.SetToolTip(chkOpenFolder, "Open containing folder after successful generation");
@@ -4791,7 +4790,6 @@ namespace GeoTableReports
 
             // Events for dynamic preview and validation
             reportTypeComboBox.SelectedIndexChanged += (s,e)=> { ReportType = reportTypeComboBox.SelectedItem?.ToString() ?? "Horizontal"; UpdatePreview(); };
-            chkLivePreview.CheckedChanged += (s,e)=> { previewBox.Visible = chkLivePreview.Checked; btnRefresh.Visible = chkLivePreview.Checked; UpdatePreview(true); };
             outputPathTextBox.TextChanged += (s,e)=> { ValidatePath(); UpdatePreview(); };
             chkAlignmentPdf.CheckedChanged += (s,e)=> { ValidatePath(); UpdatePreview(); };
 
@@ -4800,7 +4798,7 @@ namespace GeoTableReports
 
             Controls.AddRange(new Control[] {
                 lblType, reportTypeComboBox,
-                lblOutput, outputPathTextBox, browseButton, lblPathStatus, chkLivePreview, previewBox, btnRefresh,
+                lblOutput, outputPathTextBox, browseButton, lblPathStatus,
                 grpAlignment, grpGeoTable,
                 chkRemember, chkOpenFolder, chkOpenFiles,
                 okButton, cancelButton, helpButton
@@ -4810,37 +4808,6 @@ namespace GeoTableReports
             ValidatePath();
             UpdatePreview();
             ApplyTheme();
-        }
-        private void SetAllSelections(bool value)
-        {
-            chkAlignmentPdf.Checked = value;
-
-            chkAlignmentXml.Checked = value;
-            chkGeoTablePdf.Checked = value;
-            chkGeoTableExcel.Checked = value;
-        }
-        private void ApplyRecommended()
-        {
-            SetAllSelections(false);
-            switch (ReportType)
-            {
-                case "Horizontal":
-                    chkAlignmentPdf.Checked = true;
-                    chkGeoTableExcel.Checked = true;
-                    break;
-                case "Vertical":
-                    chkAlignmentXml.Checked = true;
-                    break;
-                default:
-                    chkAlignmentPdf.Checked = true;
-                    break;
-            }
-        }
-        private string FormatStationLocal(double station)
-        {
-            int sta = (int)(station / 100);
-            double offset = station - (sta * 100);
-            return $"{sta:D2}+{offset:00.00}";
         }
 
         private void UpdatePreview(bool force = false)
@@ -4852,54 +4819,8 @@ namespace GeoTableReports
             if (chkAlignmentXml.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_Alignment_Report.xml"));
             if (chkGeoTablePdf.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_GeoTable.pdf"));
             if (chkGeoTableExcel.Checked) list.Add(System.IO.Path.GetFileName(basePath + "_GeoTable.xlsx"));
-            if (previewBox.Visible)
-            {
-                if (list.Count == 0)
-                {
-                    previewBox.Text = "(No outputs selected)";
-                }
-                else
-                {
-                    var sb = new System.Text.StringBuilder();
-                    sb.AppendLine($"Alignment: {previewData.AlignmentName}");
-                    sb.AppendLine($"Span: {FormatStationLocal(previewData.StartStation)} - {FormatStationLocal(previewData.EndStation)}");
-                    sb.AppendLine($"Elements: Lines={previewData.LineCount} Arcs={previewData.ArcCount} Spirals={previewData.SpiralCount}");
-                    if (!string.IsNullOrEmpty(previewData.ProfileName) && ReportType == "Vertical") sb.AppendLine($"Profile: {previewData.ProfileName}");
-                    sb.AppendLine();
-                    // For each selected format, append a snippet header + sample lines
-                    System.Collections.Generic.List<string> sample = ReportType == "Vertical" ? previewData.VerticalSampleLines : previewData.HorizontalSampleLines;
-                    int maxLinesPerFormat = 8;
-                    if (chkAlignmentPdf.Checked) AppendFormatSnippet(sb, "Alignment PDF", sample, maxLinesPerFormat);
-
-                    if (chkAlignmentXml.Checked) AppendFormatSnippet(sb, "Alignment XML", sample, maxLinesPerFormat);
-                    if (chkGeoTablePdf.Checked) AppendFormatSnippet(sb, "GeoTable PDF", sample, maxLinesPerFormat);
-                    if (chkGeoTableExcel.Checked) AppendFormatSnippet(sb, "GeoTable Excel", sample, maxLinesPerFormat);
-                    previewBox.Text = sb.ToString();
-                }
-            }
             okButton.Enabled = lblPathStatus.Text == "✔" && list.Count > 0;
-            // Trigger PDF side preview regeneration if needed
-            // (PDF preview hook removed)
-            {
-                // (PDF preview generation removed)
-            }
         }
-
-        private void AppendFormatSnippet(System.Text.StringBuilder sb, string title, System.Collections.Generic.List<string> source, int limit)
-        {
-            sb.AppendLine($"[{title}] sample:");
-            if (source == null || source.Count == 0)
-            {
-                sb.AppendLine("  (no sample available)");
-            }
-            else
-            {
-                for (int i = 0; i < source.Count && i < limit; i++)
-                    sb.AppendLine("  " + source[i]);
-            }
-            sb.AppendLine();
-        }
-
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             // Save preferences if requested
@@ -5229,18 +5150,48 @@ namespace GeoTableReports
             PdfCanvas canvas = drawContext.GetCanvas();
             iText.Kernel.Geom.Rectangle rect = GetOccupiedAreaBBox();
             
-            // Calculate oval bounds (centered in cell, slightly smaller than cell)
-            float x = rect.GetX() + 8;
-            float y = rect.GetY() + 5;
-            float width = rect.GetWidth() - 16;
-            float height = rect.GetHeight() - 10;
+            // Fixed ellipse dimensions for consistent appearance
+            float ellipseWidth = 36f;  // Fixed width for the ellipse
+            float ellipseHeight = 14f; // Fixed height for the ellipse
+            
+            // Find the inner content area where text was rendered
+            // Get the actual content bounding box from child renderers
+            float centerX = rect.GetX() + rect.GetWidth() / 2;
+            float centerY = rect.GetY() + rect.GetHeight() / 2;
+            
+            // Try to get the actual text position from child renderers
+            var childRenderers = GetChildRenderers();
+            if (childRenderers != null && childRenderers.Count > 0)
+            {
+                var firstChild = childRenderers[0];
+                if (firstChild != null)
+                {
+                    var childArea = firstChild.GetOccupiedArea();
+                    if (childArea != null)
+                    {
+                        var childRect = childArea.GetBBox();
+                        if (childRect != null)
+                        {
+                            // Use the child (paragraph) center for ellipse positioning
+                            centerX = childRect.GetX() + childRect.GetWidth() / 2;
+                            centerY = childRect.GetY() + childRect.GetHeight() / 2;
+                        }
+                    }
+                }
+            }
+            
+            // Calculate ellipse bounds from center
+            float x1 = centerX - ellipseWidth / 2;
+            float y1 = centerY - ellipseHeight / 2;
+            float x2 = centerX + ellipseWidth / 2;
+            float y2 = centerY + ellipseHeight / 2;
 
             canvas.SaveState();
             canvas.SetStrokeColor(ColorConstants.BLACK); 
             canvas.SetLineWidth(0.5f);
             
-            // Draw ellipse inscribed in the rectangle defined by corners (x, y) and (x+width, y+height)
-            canvas.Ellipse(x, y, x + width, y + height);
+            // Draw ellipse inscribed in the rectangle defined by corners (x1, y1) and (x2, y2)
+            canvas.Ellipse(x1, y1, x2, y2);
             
             canvas.Stroke();
             canvas.RestoreState();
