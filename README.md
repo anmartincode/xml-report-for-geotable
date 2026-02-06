@@ -143,7 +143,7 @@ This is the standard Autodesk ApplicationPlugins deployment method. Civil 3D sca
 
 Only install the bundle that matches your Civil 3D version. The 2025 bundle will not load in Civil 3D 2024 because the AutoCAD series numbers will not match, and vice versa.
 
-### Manual NETLOAD (Temporary Use)
+### Manual NETLOAD
 
 For one-time testing without permanent installation, open Civil 3D, type `NETLOAD` at the command line, and browse to the compiled `GeoTableReports.{year}.dll` in the project's `bin/Debug/` folder. The add-in will remain available only for the current session. You will need to repeat this step every time Civil 3D is restarted.
 
