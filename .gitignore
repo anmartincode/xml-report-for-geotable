@@ -197,10 +197,9 @@ temp/
 # =============================================================================
 # AutoCAD/Civil 3D Plugin Deployment (Optional)
 # =============================================================================
-# Exclude the deployed bundle folder (already deployed to AppData)
-*.bundle/
-# If you want to track bundle structure, only exclude Contents folder:
-# *.bundle/Contents/
+# Track bundle structure (PackageContents.xml) but exclude compiled output
+# *.bundle/
+*.bundle/Contents/
 
 # =============================================================================
 # Operating System Files

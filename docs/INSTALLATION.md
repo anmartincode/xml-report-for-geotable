@@ -106,21 +106,28 @@ Deploy the add-in to multiple users via network share.
 
 ### Creating a Distribution Package
 
-#### Option A: Bundle ZIP (Recommended)
+#### Option A: Build and Deploy to Bundles (Recommended)
 
-Create a ZIP file containing the complete bundle:
+Build each version, then run the deploy script to populate the bundle folders:
 
 ```powershell
-# PowerShell script to create distribution package
-$bundlePath = "$env:APPDATA\Autodesk\ApplicationPlugins\GeoTableReports.bundle"
-$outputPath = ".\GeoTableReports.bundle.zip"
+# Build all versions
+cd GeoTableReports-2023; dotnet build -c Release; cd ..
+cd GeoTableReports-2024; dotnet build -c Release; cd ..
+cd GeoTableReports-2025; dotnet build -c Release; cd ..
 
-if (Test-Path $bundlePath) {
-    Compress-Archive -Path $bundlePath -DestinationPath $outputPath -Force
-    Write-Host "Distribution package created: $outputPath"
-} else {
-    Write-Host "Error: Bundle not found. Build the project first."
-}
+# Deploy build output to bundle folders
+.\deploy-bundles.ps1
+# Or for Debug builds:
+.\deploy-bundles.ps1 -Configuration Debug
+```
+
+The `deploy-bundles.ps1` script copies DLLs and config files from each version's `bin/{Configuration}/` into `bundles/GeoTableReports.{year}.bundle/Contents/Windows/{year}/`.
+
+To create a distributable ZIP from a bundle:
+
+```powershell
+Compress-Archive -Path "bundles\GeoTableReports.2025.bundle" -DestinationPath ".\GeoTableReports.2025.bundle.zip" -Force
 ```
 
 #### Option B: Installer Script

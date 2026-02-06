@@ -102,6 +102,17 @@ For the 2023 and 2024 projects, ensure the .NET Framework 4.8 targeting pack is 
 
 The compiled output lands in `bin/Debug/` within each project folder. The post-build step copies everything to `%AppData%\Autodesk\ApplicationPlugins\GeoTableReports.bundle\Contents\Windows\{year}\`.
 
+### Deploying to Bundles
+
+After building, run the included `deploy-bundles.ps1` script to copy DLLs and config files from each version's build output into the corresponding `bundles/` directory:
+
+```powershell
+.\deploy-bundles.ps1                        # copies Release builds (default)
+.\deploy-bundles.ps1 -Configuration Debug   # copies Debug builds instead
+```
+
+The script processes all three versions (2023, 2024, 2025) and copies `*.dll` and `*.dll.config` files from `GeoTableReports-{year}/bin/{Configuration}/` into `bundles/GeoTableReports.{year}.bundle/Contents/Windows/{year}/`. Versions whose build output does not exist are skipped with a warning.
+
 ---
 
 ## Installation and Deployment

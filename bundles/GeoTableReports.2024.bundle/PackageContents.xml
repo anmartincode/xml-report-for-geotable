@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage
+  SchemaVersion="1.0"
+  AutodeskProduct="Civil3D"
+  ProductType="Application"
+  Name="GeoTable Reports 2024"
+  Description="Generate professional GeoTable reports in Excel and PDF formats for Civil 3D 2024"
+  AppVersion="1.0.0"
+  Author="Your Name"
+  ProductCode="{B6C7D8E9-F0A1-4B2C-3D4E-5F6A7B8C9D0E}"
+  HelpFile="./docs/README.md">
+
+  <CompanyDetails
+    Name="Your Company"
+    Url="https://yourcompany.com"
+    Email="support@yourcompany.com" />
+
+  <RuntimeRequirements
+    OS="Win64"
+    Platform="AutoCAD"
+    SeriesMin="R24.3"
+    SeriesMax="R24.3" />
+
+  <Components Description="GeoTable Reports Components">
+    <RuntimeRequirements
+      OS="Win64"
+      Platform="AutoCAD"
+      SeriesMin="R24.3"
+      SeriesMax="R24.3" />
+
+    <ComponentEntry
+      AppName="GeoTableReports"
+      Version="1.0.0"
+      ModuleName="./Contents/Windows/2024/GeoTableReports.2024.dll"
+      AppDescription="GeoTable Reports for Civil 3D 2024"
+      LoadOnCommandInvocation="True"
+      LoadOnAutoCADStartup="True">
+
+      <Commands GroupName="GeoTableReports">
+        <Command Global="GEOTABLE" Local="GEOTABLE" />
+        <Command Global="GEOTABLE_BATCH" Local="GEOTABLE_BATCH" />
+      </Commands>
+    </ComponentEntry>
+  </Components>
+</ApplicationPackage>

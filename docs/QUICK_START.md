@@ -1,21 +1,27 @@
 # GeoTable Reports - Quick Start Guide
 
-## For Developers: Building the Distribution
+## For Developers: Building and Deploying
 
-### One Command Build
+### Build Each Version
 ```powershell
-.\Build-MultiVersionBundle.ps1
+# Build all three versions
+cd GeoTableReports-2023; dotnet build -c Release; cd ..
+cd GeoTableReports-2024; dotnet build -c Release; cd ..
+cd GeoTableReports-2025; dotnet build -c Release; cd ..
 ```
 
-**Output:** `dist\GeoTableReports-MultiVersion-v1.0.0.zip`
+### Deploy to Bundles
+```powershell
+.\deploy-bundles.ps1
+```
 
 **What it does:**
-1. ✅ Builds GeoTableReports-2023 (.NET Framework 4.8)
-2. ✅ Builds GeoTableReports-2024 (.NET Framework 4.8)
-3. ✅ Builds GeoTableReports-2025 (.NET 8.0)
-4. ✅ Creates unified bundle structure
-5. ✅ Generates multi-version PackageContents.xml
-6. ✅ Packages everything into distributable ZIP
+1. ✅ Copies GeoTableReports-2023 Release output → `bundles/GeoTableReports.2023.bundle/`
+2. ✅ Copies GeoTableReports-2024 Release output → `bundles/GeoTableReports.2024.bundle/`
+3. ✅ Copies GeoTableReports-2025 Release output → `bundles/GeoTableReports.2025.bundle/`
+4. ✅ Skips any version not yet built (with a warning)
+
+Use `-Configuration Debug` to deploy Debug builds instead.
 
 ---
 
@@ -110,25 +116,22 @@ xml-report-for-geotable/
 
 ## Common Commands
 
-### Build Everything
-```powershell
-.\Build-MultiVersionBundle.ps1
-```
-
-### Install Locally
-```powershell
-.\Install-GeoTableReports.ps1
-```
-
-### Uninstall
-```powershell
-.\Install-GeoTableReports.ps1 -Uninstall
-```
-
 ### Build Single Version
 ```powershell
 cd GeoTableReports-2025
 dotnet build -c Release
+```
+
+### Deploy All Versions to Bundles
+```powershell
+.\deploy-bundles.ps1
+.\deploy-bundles.ps1 -Configuration Debug   # for Debug builds
+```
+
+### Install a Bundle Locally
+Copy the appropriate `.bundle` folder to:
+```
+%AppData%\Autodesk\ApplicationPlugins\
 ```
 
 ---
@@ -153,12 +156,12 @@ dotnet build -c Release
 
 | Task | Command |
 |------|---------|
-| Build all versions | `.\Build-MultiVersionBundle.ps1` |
-| Install for user | `.\Install-GeoTableReports.ps1` |
-| Uninstall | `.\Install-GeoTableReports.ps1 -Uninstall` |
+| Build a version | `cd GeoTableReports-2025; dotnet build -c Release` |
+| Deploy to bundles | `.\deploy-bundles.ps1` |
+| Deploy Debug builds | `.\deploy-bundles.ps1 -Configuration Debug` |
 | Check installation | `%AppData%\Autodesk\ApplicationPlugins\` |
-| Use in Civil3D | `GEOTABLEEXCEL` or `GEOTABLEPDF` |
+| Use in Civil3D | `GEOTABLE` or `GEOTABLE_BATCH` |
 
 ---
 
-Need more details? See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+Need more details? See [INSTALLATION.md](INSTALLATION.md)

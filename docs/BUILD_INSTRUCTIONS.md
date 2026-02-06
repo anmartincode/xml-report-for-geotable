@@ -48,6 +48,17 @@ The project includes a post-build event that automatically copies the compiled D
 
 This ensures Civil 3D can load the plugin with all required dependencies.
 
+### Deploying to Bundle Folders
+
+To populate the `bundles/` directory with build output for all three versions, run the deploy script from the repository root:
+
+```powershell
+.\deploy-bundles.ps1                        # copies Release builds (default)
+.\deploy-bundles.ps1 -Configuration Debug   # copies Debug builds
+```
+
+The script copies `*.dll` and `*.dll.config` files from each version's `bin/{Configuration}/` into the corresponding `bundles/GeoTableReports.{year}.bundle/Contents/Windows/{year}/` folder. Any version whose build output doesn't exist is skipped with a warning.
+
 ## Troubleshooting
 
 If you encounter the error:
