@@ -1,0 +1,58 @@
+{
+  "name": "GeoTable Reports",
+  "version": "1.0.0",
+  "description": "Generate professional GeoTable reports in Excel and PDF formats for Civil 3D alignments. Produces InRoads-style GeoTable documents used in rail and highway survey documentation.",
+  "author": {
+    "name": "A. Martinez"
+  },
+  "company": {
+    "name": "HNTB",
+    "url": "https://www.hntb.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://bitbucket.org/hntb/civil3d-geotable-automation"
+  },
+  "license": "Proprietary",
+  "platforms": [
+    {
+      "version": "Civil 3D 2023",
+      "targetFramework": ".NET Framework 4.8",
+      "autocadSeries": "R24.2",
+      "assembly": "GeoTableReports.2023.dll"
+    },
+    {
+      "version": "Civil 3D 2024",
+      "targetFramework": ".NET Framework 4.8",
+      "autocadSeries": "R24.3",
+      "assembly": "GeoTableReports.2024.dll"
+    },
+    {
+      "version": "Civil 3D 2025",
+      "targetFramework": ".NET 8.0",
+      "autocadSeries": "R25.0",
+      "assembly": "GeoTableReports.2025.dll"
+    }
+  ],
+  "commands": [
+    {
+      "name": "GEOTABLE",
+      "description": "Generate alignment reports via dialog interface"
+    },
+    {
+      "name": "GEOTABLE_BATCH",
+      "description": "Batch process all alignments in the drawing"
+    }
+  ],
+  "outputFormats": [
+    "GeoTable Excel (.xlsx)",
+    "GeoTable PDF",
+    "Alignment PDF",
+    "Alignment XML"
+  ],
+  "dependencies": {
+    "itext7": "8.0.5",
+    "itext7.bouncy-castle-adapter": "8.0.5",
+    "EPPlus": "7.5.2"
+  }
+}
