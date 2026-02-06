@@ -3069,7 +3069,7 @@ namespace GeoTableReports
                                     row = WriteGeoTableCurveExcel(ws, entity as AlignmentArc, alignment, i, row, curveNumber, reportEntities);
                                     break;
                                 case AlignmentEntityType.Spiral:
-                                    row = WriteGeoTableSpiralExcel(ws, entity, alignment, i, row);
+                                    row = WriteGeoTableSpiralExcel(ws, entity, alignment, i, row, reportEntities);
                                     break;
                                 case AlignmentEntityType.SpiralCurveSpiral:
                                     row = WriteGeoTableSCSExcel(ws, entity as AlignmentSCS, alignment, i, row, ref curveNumber);
@@ -3086,11 +3086,11 @@ namespace GeoTableReports
 
                     lastDataRow = row - 1;
 
-                    // Delete empty rows (rows where columns 1-7 are all empty)
+                    // Delete empty rows (rows where columns 1-11 are all empty)
                     for (int r = lastDataRow; r >= startDataRow; r--)
                     {
                         bool isEmpty = true;
-                        for (int c = 1; c <= 7; c++)
+                        for (int c = 1; c <= 11; c++)
                         {
                             if (ws.Cells[r, c].Value != null)
                             {
@@ -3172,22 +3172,13 @@ namespace GeoTableReports
 
             try
             {
-                double x1 = 0, y1 = 0, z1 = 0;
-                alignment.PointLocation(line.StartStation, 0, 0, ref x1, ref y1, ref z1);
-
                 string bearing = FormatBearingDMS(line.Direction);
-                string pointLabel = (index == 0) ? "POB" : "PI"; // InRoads mapping
 
                 ws.Cells[row, 1].Value = "TANGENT";
-                // Merge and center empty CURVE No. column
+                // Columns 2-4 (CURVE No., POINT, STATION) left empty to match PDF format
                 ws.Cells[row, 2].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-                ws.Cells[row, 3].Value = pointLabel;
-                ws.Cells[row, 4].Value = FormatStation(line.StartStation);
                 ws.Cells[row, 5].Value = bearing;
-                ws.Cells[row, 6].Value = y1;
-                ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
-                ws.Cells[row, 7].Value = x1;
-                ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
+                // Columns 6-7 (Northing, Easting) left empty to match PDF format
 
                 // DATA - single merged cell for tangent
                 string data = $"L = {FormatDistanceFeet(line.Length)}";
@@ -3266,10 +3257,16 @@ namespace GeoTableReports
                     CalculateCurveCenter(arc, alignment, out centerN, out centerE);
                 }
 
-                // Row 1: PC (Start of Curve per InRoads) - no bearing per PDF format
+                // Determine labels based on neighbors (matching PDF format)
+                AlignmentEntity prevEntity = index > 0 ? sortedEntities[index - 1] : null;
+                AlignmentEntity nextEntity = index < sortedEntities.Count - 1 ? sortedEntities[index + 1] : null;
+                string startLabel = (prevEntity != null && prevEntity.EntityType == AlignmentEntityType.Spiral) ? "SC" : "PC";
+                string endLabel = (nextEntity != null && nextEntity.EntityType == AlignmentEntityType.Spiral) ? "CS" : "PT";
+
+                // Row 1: Start of Curve (PC or SC depending on neighbors) - no bearing per PDF format
                 ws.Cells[row, 1].Value = "CURVE";
                 ws.Cells[row, 2].Value = $"{curveNumber}-{directionStr}";
-                ws.Cells[row, 3].Value = "PC";
+                ws.Cells[row, 3].Value = startLabel;
                 ws.Cells[row, 4].Value = FormatStation(arc.StartStation);
                 ws.Cells[row, 5].Value = ""; // No bearing for PC per PDF format
                 ws.Cells[row, 6].Value = y1;
@@ -3333,8 +3330,8 @@ namespace GeoTableReports
                 ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 3: PT (End of Curve per InRoads) - empty bearing per InRails standard
-                ws.Cells[row, 3].Value = "PT";
+                // Row 3: End of Curve (PT or CS depending on neighbors) - empty bearing per InRails standard
+                ws.Cells[row, 3].Value = endLabel;
                 ws.Cells[row, 4].Value = FormatStation(arc.EndStation);
                 ws.Cells[row, 5].Value = ""; // Empty bearing column for PT
                 ws.Cells[row, 5].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
@@ -3389,7 +3386,7 @@ namespace GeoTableReports
             }
         }
 
-        private int WriteGeoTableSpiralExcel(ExcelWorksheet ws, AlignmentEntity spiralEntity, CivDb.Alignment alignment, int index, int row)
+        private int WriteGeoTableSpiralExcel(ExcelWorksheet ws, AlignmentEntity spiralEntity, CivDb.Alignment alignment, int index, int row, System.Collections.Generic.List<AlignmentEntity> reportEntities = null)
         {
             if (spiralEntity == null) return row + 2;
 
@@ -3456,32 +3453,41 @@ namespace GeoTableReports
                 alignment.PointLocation(startStation, 0, 0, ref x1, ref y1, ref z1);
                 alignment.PointLocation(endStation, 0, 0, ref x2, ref y2, ref z2);
 
-                // Determine entry/exit classification for labels
-                bool isEntry = double.IsInfinity(radiusIn) || radiusIn == 0 || radiusIn > radiusOut;
-                string startLabel = isEntry ? "TS" : "CS";
-                string endLabel = isEntry ? "SC" : "ST";
+                // Determine entry/exit based on neighbors (matching PDF format)
+                AlignmentEntity prevEnt = (reportEntities != null && index > 0) ? reportEntities[index - 1] : null;
+                AlignmentEntity nextEnt = (reportEntities != null && index < reportEntities.Count - 1) ? reportEntities[index + 1] : null;
+                bool showAsEntry = (nextEnt != null && nextEnt.EntityType == AlignmentEntityType.Arc);
+                bool showAsExit = (prevEnt != null && prevEnt.EntityType == AlignmentEntityType.Arc);
+                if (!showAsEntry && !showAsExit) showAsEntry = true; // default to entry
 
                 // Calculate spiral parameters
                 double spiralLength = length;
                 // Use actual radius from spiral if available, otherwise default
-                double radius = radiusOut > 0 ? radiusOut : (radiusIn > 0 ? radiusIn : 1000);
+                bool isEntry = double.IsInfinity(radiusIn) || radiusIn == 0 || radiusIn > radiusOut;
+                double radius = isEntry ? (radiusOut > 0 ? radiusOut : 1000) : (radiusIn > 0 ? radiusIn : 1000);
                 double theta = CalculateSpiralAngle(spiralLength, radius);
                 double xs = CalculateSpiralX(spiralLength, theta);
                 double ys = CalculateSpiralY(spiralLength, theta);
                 double p = ys;  // Simplified
                 double k = spiralLength / 2.0;  // Simplified
 
-                // Row 1: TS (entry) or CS (exit) start point - no bearing per PDF format
+                // Single point label: TS for entry spiral, ST for exit spiral (matching PDF format)
+                string pointLabel = showAsEntry ? "TS" : "ST";
+                double displayStation = showAsEntry ? startStation : endStation;
+                double displayY = showAsEntry ? y1 : y2;
+                double displayX = showAsEntry ? x1 : x2;
+
+                // Row 1: Single point (TS or ST) with station and coords
                 ws.Cells[row, 1].Value = "SPIRAL";
-                ws.Cells[row, 3].Value = startLabel; // Dynamic: TS or CS
-                ws.Cells[row, 4].Value = FormatStation(startStation);
-                ws.Cells[row, 5].Value = ""; // No bearing for spiral start per PDF format
-                ws.Cells[row, 6].Value = y1;
+                ws.Cells[row, 3].Value = pointLabel;
+                ws.Cells[row, 4].Value = FormatStation(displayStation);
+                ws.Cells[row, 5].Value = ""; // No bearing for spiral per PDF format
+                ws.Cells[row, 6].Value = displayY;
                 ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
-                ws.Cells[row, 7].Value = x1;
+                ws.Cells[row, 7].Value = displayX;
                 ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
 
-                // DATA for row 1 - individual cells
+                // DATA for row 1 - δs, Ls, LT, STs
                 ws.Cells[row, 8].Value = $"δs = {FormatAngleDMS(theta)}";
                 ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 8].Style.Fill.PatternType = ExcelFillStyle.Solid;
@@ -3503,17 +3509,7 @@ namespace GeoTableReports
                 ws.Cells[row, 11].Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.White);
                 row++;
 
-                // Row 2: End point (SC or ST) - no bearing per PDF format
-                ws.Cells[row, 3].Value = endLabel; // Dynamic: ST or SC
-                ws.Cells[row, 4].Value = FormatStation(endStation);
-                ws.Cells[row, 5].Value = ""; // No bearing for spiral end per PDF format
-                ws.Cells[row, 5].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
-                ws.Cells[row, 6].Value = y2;
-                ws.Cells[row, 6].Style.Numberformat.Format = "0.0000";
-                ws.Cells[row, 7].Value = x2;
-                ws.Cells[row, 7].Style.Numberformat.Format = "0.0000";
-
-                // DATA for row 2 - individual cells
+                // Row 2: Empty columns 1-7, DATA row 2 - Xs, Ys, P, K (matching PDF 2-line data block)
                 ws.Cells[row, 8].Value = $"Xs= {FormatDistanceFeet(xs)}";
                 ws.Cells[row, 8].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
                 ws.Cells[row, 8].Style.Fill.PatternType = ExcelFillStyle.Solid;
